@@ -38,9 +38,20 @@ router.get('/compose', async (req, res, next) => {
 router.get('/queue', async (req, res, next) => {
   try {
     const posts = await storage.listPosts({});
-    const queued = posts.filter((p) => p.status !== 'draft');
+    const queued = posts.filter((p) => p.status !== 'draft' && p.status !== 'posted');
     const token = await storage.getToken();
     res.render('queue', { title: 'Queue', active: 'queue', posts: queued, token });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/posted', async (req, res, next) => {
+  try {
+    const posts = await storage.listPosts({ status: 'posted' });
+    posts.sort((a, b) => new Date(b.postedAt || b.createdAt) - new Date(a.postedAt || a.createdAt));
+    const token = await storage.getToken();
+    res.render('posted', { title: 'Posted', active: 'posted', posts, token });
   } catch (err) {
     next(err);
   }

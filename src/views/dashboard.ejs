@@ -19,7 +19,10 @@
     </div>
 
     <div class="card">
-      <h2>Recently posted</h2>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <h2 style="margin:0;">Recently posted</h2>
+        <% if (posted.length) { %><a href="/posted" class="hint">view all →</a><% } %>
+      </div>
       <% if (!posted.length) { %>
         <p class="hint">Nothing published yet.</p>
       <% } else { %>

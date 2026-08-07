@@ -1,0 +1,46 @@
+<div class="card">
+  <h2>Published Posts</h2>
+  <% if (!posts.length) { %>
+    <p class="hint">No published posts yet. Scheduled posts will appear here after they are published to LinkedIn.</p>
+  <% } %>
+</div>
+
+<% posts.forEach(function(p) { %>
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
+      <div>
+        <span class="status-pill posted">posted</span>
+        <span class="hint">&nbsp;<%= p.source %> &middot; posted <%= friendlyDate(p.postedAt || p.updatedAt) %></span>
+      </div>
+      <% if (p.linkedinPostUrl) { %>
+        <div>
+          <a class="btn secondary" href="<%= p.linkedinPostUrl %>" target="_blank" rel="noopener">View on LinkedIn ↗</a>
+        </div>
+      <% } %>
+    </div>
+
+    <div class="two-col">
+      <div class="col">
+        <p style="white-space:pre-wrap; margin-top:0;"><%= p.content %></p>
+        <% if (p.mediaPath) { %><p class="hint">📎 <%= p.mediaPath %></p><% } %>
+        <p class="hint" style="color:var(--green);">✓ Published to LinkedIn</p>
+      </div>
+      <div class="col">
+        <div class="posted-preview" data-id="<%= p.id %>" data-content="<%= p.content %>" data-media="<%= p.mediaPath || '' %>"></div>
+      </div>
+    </div>
+  </div>
+<% }); %>
+
+<script src="/js/preview.js"></script>
+<script>
+  const profile = {
+    name: <%- JSON.stringify(token ? token.displayName : null) %>,
+    headline: <%- JSON.stringify(token ? token.headline : null) %>,
+    avatarUrl: <%- JSON.stringify(token ? token.pictureUrl : null) %>,
+  };
+  document.querySelectorAll('.posted-preview').forEach(function (container) {
+    const preview = LIPreview.mountPreview(container, profile);
+    preview.update(container.dataset.content, container.dataset.media);
+  });
+</script>
