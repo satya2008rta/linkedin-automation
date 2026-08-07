@@ -262,4 +262,37 @@ router.post('/:id/cancel', async (req, res, next) => {
   }
 });
 
+// Reschedule a post's date while preserving its original posting time.
+router.post('/:id/reschedule-date', async (req, res, next) => {
+  try {
+    const { newDate } = req.body; // format YYYY-MM-DD
+    if (!newDate || !/^\d{4}-\d{2}-\d{2}$/.test(newDate)) {
+      return res.status(400).json({ error: 'Valid newDate (YYYY-MM-DD) required.' });
+    }
+
+    const post = await storage.getPost(Number(req.params.id));
+    if (!post) {
+      return res.status(404).json({ error: 'Post not found.' });
+    }
+
+    // Determine original time (hours, minutes, seconds)
+    const baseDateStr = post.scheduledFor || post.postedAt || post.createdAt || new Date().toISOString();
+    const origDate = new Date(baseDateStr);
+
+    const [y, m, d] = newDate.split('-').map(Number);
+    const targetDate = new Date(origDate);
+    targetDate.setFullYear(y, m - 1, d);
+
+    const newScheduledIso = targetDate.toISOString();
+
+    const updated = await storage.updatePost(post.id, {
+      scheduledFor: newScheduledIso,
+    });
+
+    res.json({ ok: true, post: updated, newScheduledFor: newScheduledIso });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;

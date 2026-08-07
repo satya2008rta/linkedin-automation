@@ -1,6 +1,6 @@
 <div class="card">
   <h2>AI Content Calendar</h2>
-  <p class="hint">Generates a month of draft posts from your <a href="/settings">AI settings</a>. Nothing is scheduled or published until you review and approve each draft individually.</p>
+  <p class="hint">Generates a month of draft posts from your <a href="/settings">AI settings</a>. Drag and drop any post onto a new date to reschedule it while preserving the original posting time!</p>
   <% if (!settings.geminiApiKey) { %>
     <p class="hint" style="color:#b31b1b;">No Gemini API key saved yet — add one in <a href="/settings">Settings</a> first.</p>
   <% } %>
@@ -115,12 +115,98 @@
     return `${y}-${m}-${day}`;
   }
 
+  let draggedPostId = null;
+
+  function handleDragStart(e, postId) {
+    draggedPostId = postId;
+    e.dataTransfer.setData('text/plain', postId);
+    e.dataTransfer.effectAllowed = 'move';
+    e.target.classList.add('dragging');
+  }
+
+  function handleDragEnd(e) {
+    e.target.classList.remove('dragging');
+    document.querySelectorAll('.outlook-day-cell').forEach(cell => cell.classList.remove('drag-over'));
+  }
+
+  function handleDragOver(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  }
+
+  function handleDragEnter(e) {
+    e.preventDefault();
+    const cell = e.target.closest('.outlook-day-cell');
+    if (cell) cell.classList.add('drag-over');
+  }
+
+  function handleDragLeave(e) {
+    const cell = e.target.closest('.outlook-day-cell');
+    if (cell) cell.classList.remove('drag-over');
+  }
+
+  async function handleDrop(e, targetDateStr) {
+    e.preventDefault();
+    const cell = e.target.closest('.outlook-day-cell');
+    if (cell) cell.classList.remove('drag-over');
+
+    if (!draggedPostId || !targetDateStr) return;
+
+    const postId = draggedPostId;
+    const post = allPosts.find(p => p.id === postId);
+    if (!post) return;
+
+    const oldDateKey = getPostDateKey(post);
+    if (oldDateKey === targetDateStr) return;
+
+    try {
+      const res = await fetch(`/posts/${postId}/reschedule-date`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({ newDate: targetDateStr })
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to reschedule post.');
+      }
+
+      const data = await res.json();
+      if (data.ok && data.post) {
+        post.scheduledFor = data.newScheduledFor;
+        renderOutlookCalendar(currentYear, currentMonth);
+
+        const friendlyTime = new Date(data.newScheduledFor).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        showToast(`Rescheduled to ${targetDateStr} at ${friendlyTime} (posting time preserved)`);
+      }
+    } catch (err) {
+      alert('Reschedule error: ' + err.message);
+    } finally {
+      draggedPostId = null;
+    }
+  }
+
+  function showToast(msg) {
+    let toast = document.getElementById('toast-msg');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'toast-msg';
+      toast.className = 'toast-notification';
+      document.body.appendChild(toast);
+    }
+    toast.textContent = '✓ ' + msg;
+    toast.style.display = 'block';
+    setTimeout(() => { toast.style.display = 'none'; }, 4000);
+  }
+
   function renderOutlookCalendar(year, month) {
     const grid = document.getElementById('outlook-calendar-grid');
     const title = document.getElementById('cal-month-title');
     title.textContent = `${monthNames[month - 1]} ${year}`;
 
-    // Index posts by YYYY-MM-DD
     const postsByDate = {};
     allPosts.forEach(p => {
       const key = getPostDateKey(p);
@@ -129,7 +215,7 @@
       }
     });
 
-    const firstDayIndex = new Date(year, month - 1, 1).getDay(); // 0 = Sun
+    const firstDayIndex = new Date(year, month - 1, 1).getDay();
     const daysInMonth = new Date(year, month, 0).getDate();
     const daysInPrevMonth = new Date(year, month - 1, 0).getDate();
 
@@ -141,8 +227,6 @@
 
     const now = new Date();
     const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-
-    // Total cells in grid (usually 35 or 42)
     const totalCells = Math.ceil((firstDayIndex + daysInMonth) / 7) * 7;
 
     for (let i = 0; i < totalCells; i++) {
@@ -165,7 +249,8 @@
       const isToday = dateStr === todayStr;
       const dayPosts = postsByDate[dateStr] || [];
 
-      html += `<div class="outlook-day-cell ${isOtherMonth ? 'other-month' : ''} ${isToday ? 'today' : ''}">`;
+      html += `<div class="outlook-day-cell ${isOtherMonth ? 'other-month' : ''} ${isToday ? 'today' : ''}" `;
+      html += `data-date="${dateStr}" ondragover="handleDragOver(event)" ondragenter="handleDragEnter(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event, '${dateStr}')">`;
       html += `<div class="outlook-day-number">${dayNum}</div>`;
       html += `<div class="outlook-events">`;
 
@@ -175,8 +260,8 @@
         else if (p.status === 'pending') labelIcon = '⏳';
         else if (p.status === 'failed' || p.status === 'blocked_token_expired') labelIcon = '⚠';
 
-        const snippet = p.content.length > 25 ? p.content.slice(0, 25) + '…' : p.content;
-        html += `<div class="event-pill ${p.status}" onclick="openEventModal(${p.id})">${labelIcon} ${snippet}</div>`;
+        const snippet = p.content.length > 22 ? p.content.slice(0, 22) + '…' : p.content;
+        html += `<div class="event-pill ${p.status}" draggable="true" ondragstart="handleDragStart(event, ${p.id})" ondragend="handleDragEnd(event)" onclick="openEventModal(${p.id})" title="Drag onto any date cell to reschedule (time preserved)">${labelIcon} ${snippet}</div>`;
       });
 
       html += `</div></div>`;
