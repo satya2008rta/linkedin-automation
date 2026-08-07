@@ -285,11 +285,20 @@ router.post('/:id/reschedule-date', async (req, res, next) => {
 
     const newScheduledIso = targetDate.toISOString();
 
-    const updated = await storage.updatePost(post.id, {
-      scheduledFor: newScheduledIso,
+    const allPosts = await storage.listPosts({});
+    const existingOnTargetDay = allPosts.filter((p) => {
+      if (p.id === post.id) return false;
+      const pDate = p.scheduledFor || p.postedAt || p.createdAt;
+      return pDate && pDate.slice(0, 10) === newDate;
     });
 
-    res.json({ ok: true, post: updated, newScheduledFor: newScheduledIso });
+    const finalScheduledIso = autoSpaceTargetTime(newScheduledIso, existingOnTargetDay, post.id);
+
+    const updated = await storage.updatePost(post.id, {
+      scheduledFor: finalScheduledIso,
+    });
+
+    res.json({ ok: true, post: updated, newScheduledFor: finalScheduledIso });
   } catch (err) {
     next(err);
   }

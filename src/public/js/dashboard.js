@@ -7,6 +7,37 @@ document.addEventListener('submit', (e) => {
   const confirmEl = (e.submitter && e.submitter.hasAttribute('data-confirm')) ? e.submitter : form;
   if (confirmEl.matches('[data-confirm]') && !window.confirm(confirmEl.getAttribute('data-confirm'))) {
     e.preventDefault();
+    return;
+  }
+
+  // Check 8-hour proximity warning if a custom scheduled time is selected
+  const scheduledInput = form.querySelector('input[name="scheduledFor"]') || form.querySelector('input[type="datetime-local"]');
+  if (scheduledInput && scheduledInput.value) {
+    const targetDate = new Date(scheduledInput.value);
+    if (!Number.isNaN(targetDate.getTime())) {
+      const targetTime = targetDate.getTime();
+      const posts = window.allPosts || [];
+      const currentPostId = form.dataset.id || (e.submitter && e.submitter.dataset.id);
+      const EIGHT_HOURS_MS = 8 * 60 * 60 * 1000;
+
+      const conflicting = posts.find((p) => {
+        if (currentPostId && String(p.id) === String(currentPostId)) return false;
+        const pDateStr = p.scheduledFor || p.postedAt || p.createdAt;
+        if (!pDateStr) return false;
+        const pTime = new Date(pDateStr).getTime();
+        if (Number.isNaN(pTime)) return false;
+        return Math.abs(targetTime - pTime) < EIGHT_HOURS_MS;
+      });
+
+      if (conflicting) {
+        const conflictFormatted = new Date(conflicting.scheduledFor || conflicting.postedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const conflictDate = new Date(conflicting.scheduledFor || conflicting.postedAt).toLocaleDateString();
+        const proceed = window.confirm(`Warning: Another post is scheduled within 8 hours of this time (on ${conflictDate} at ${conflictFormatted}). Do you still want to schedule it?`);
+        if (!proceed) {
+          e.preventDefault();
+        }
+      }
+    }
   }
 });
 

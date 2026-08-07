@@ -1,11 +1,21 @@
 <div class="card">
   <h2>AI Content Calendar</h2>
-  <p class="hint">Generates a month of draft posts from your <a href="/settings">AI settings</a>. Drag and drop any post onto a new date to reschedule it while preserving the original posting time!</p>
+  <p class="hint">Generates draft posts for your selected date range using your <a href="/settings">AI settings</a>. Drag and drop any post onto a new date to reschedule it — an 8-hour gap is automatically maintained between multiple posts on the same date!</p>
   <% if (!settings.geminiApiKey) { %>
     <p class="hint" style="color:#b31b1b;">No Gemini API key saved yet — add one in <a href="/settings">Settings</a> first.</p>
   <% } %>
-  <form method="POST" action="/ai/generate-plan">
-    <button type="submit" class="btn" <%= settings.geminiApiKey ? '' : 'disabled' %>>Generate month plan</button>
+  <form method="POST" action="/ai/generate-plan" style="display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end; margin-top:12px;">
+    <div>
+      <label style="display:block; font-size:12px; font-weight:600; margin-bottom:4px;">From Date</label>
+      <input type="date" name="fromDate" id="gen-from-date" class="form-control" style="padding:6px 10px; font-size:13px;">
+    </div>
+    <div>
+      <label style="display:block; font-size:12px; font-weight:600; margin-bottom:4px;">To Date</label>
+      <input type="date" name="toDate" id="gen-to-date" class="form-control" style="padding:6px 10px; font-size:13px;">
+    </div>
+    <div>
+      <button type="submit" class="btn" <%= settings.geminiApiKey ? '' : 'disabled' %>>Generate plan for date range</button>
+    </div>
   </form>
 </div>
 
@@ -39,7 +49,7 @@
 </div>
 
 <% if (!days.length) { %>
-  <div class="card"><p class="hint">No AI drafts awaiting review yet. Generate a plan above.</p></div>
+  <div class="card"><p class="hint">No AI drafts awaiting review yet. Select a date range and generate a plan above.</p></div>
 <% } %>
 
 <% days.forEach(function(day) { %>
@@ -109,6 +119,8 @@
   };
 
   const allPosts = <%- JSON.stringify(allPosts || []) %>;
+  window.allPosts = allPosts; // Expose globally for 8-hour proximity check
+
   let currentYear = <%= year %>;
   let currentMonth = <%= month %>; // 1-based (1 = Jan, 8 = Aug)
 
@@ -116,6 +128,14 @@
     'January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'
   ];
+
+  // Set default From and To dates for plan generation
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const thirtyDaysStr = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+  const fromDateEl = document.getElementById('gen-from-date');
+  const toDateEl = document.getElementById('gen-to-date');
+  if (fromDateEl && !fromDateEl.value) fromDateEl.value = todayStr;
+  if (toDateEl && !toDateEl.value) toDateEl.value = thirtyDaysStr;
 
   function getPostDateKey(post) {
     const raw = post.postedAt || post.scheduledFor || post.createdAt;
@@ -192,7 +212,7 @@
         renderOutlookCalendar(currentYear, currentMonth);
 
         const friendlyTime = new Date(data.newScheduledFor).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        showToast(`Rescheduled to ${targetDateStr} at ${friendlyTime} (posting time preserved)`);
+        showToast(`Rescheduled to ${targetDateStr} at ${friendlyTime} (8-hour spacing maintained)`);
       }
     } catch (err) {
       alert('Reschedule error: ' + err.message);
@@ -238,7 +258,7 @@
     });
 
     const now = new Date();
-    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const currTodayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     const totalCells = Math.ceil((firstDayIndex + daysInMonth) / 7) * 7;
 
     for (let i = 0; i < totalCells; i++) {
@@ -258,7 +278,7 @@
       }
 
       const dateStr = `${cellYear}-${String(cellMonth).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
-      const isToday = dateStr === todayStr;
+      const isToday = dateStr === currTodayStr;
       const dayPosts = postsByDate[dateStr] || [];
 
       html += `<div class="outlook-day-cell ${isOtherMonth ? 'other-month' : ''} ${isToday ? 'today' : ''}" `;
@@ -273,7 +293,7 @@
         else if (p.status === 'failed' || p.status === 'blocked_token_expired') labelIcon = '⚠';
 
         const snippet = p.content.length > 22 ? p.content.slice(0, 22) + '…' : p.content;
-        html += `<div class="event-pill ${p.status}" draggable="true" ondragstart="handleDragStart(event, ${p.id})" ondragend="handleDragEnd(event)" onclick="openEventModal(${p.id})" title="Drag onto any date cell to reschedule (time preserved)">${labelIcon} ${snippet}</div>`;
+        html += `<div class="event-pill ${p.status}" draggable="true" ondragstart="handleDragStart(event, ${p.id})" ondragend="handleDragEnd(event)" onclick="openEventModal(${p.id})" title="Drag onto any date cell to reschedule">${labelIcon} ${snippet}</div>`;
       });
 
       html += `</div></div>`;
@@ -311,6 +331,7 @@
     document.getElementById('modal-date').textContent = dateStr;
 
     const form = document.getElementById('modal-post-form');
+    form.dataset.id = post.id;
     const contentInput = document.getElementById('modal-content-input');
     const mediaInput = document.getElementById('modal-media-input');
     const scheduledInput = document.getElementById('modal-scheduled-input');
@@ -322,14 +343,14 @@
     let actionsHtml = '';
     if (post.status === 'draft') {
       form.action = `/ai/drafts/${post.id}/approve`;
-      actionsHtml += `<button class="btn" type="submit" formaction="/ai/drafts/${post.id}/approve">Approve Draft</button>`;
-      actionsHtml += `<button class="btn secondary" type="submit" formaction="/ai/drafts/${post.id}/update">Save Edits</button>`;
-      actionsHtml += `<button class="btn danger" type="submit" formaction="/ai/drafts/${post.id}/discard" data-confirm="Discard this draft?">Discard</button>`;
+      actionsHtml += `<button class="btn" type="submit" formaction="/ai/drafts/${post.id}/approve" data-id="${post.id}">Approve Draft</button>`;
+      actionsHtml += `<button class="btn secondary" type="submit" formaction="/ai/drafts/${post.id}/update" data-id="${post.id}">Save Edits</button>`;
+      actionsHtml += `<button class="btn danger" type="submit" formaction="/ai/drafts/${post.id}/discard" data-id="${post.id}" data-confirm="Discard this draft?">Discard</button>`;
     } else if (post.status === 'pending' || post.status === 'failed' || post.status === 'blocked_token_expired') {
       form.action = `/posts/${post.id}/update`;
-      actionsHtml += `<button class="btn" type="submit" formaction="/posts/${post.id}/post-now" data-confirm="Publish to LinkedIn right now?">Post Now</button>`;
-      actionsHtml += `<button class="btn secondary" type="submit" formaction="/posts/${post.id}/update">Save Edits</button>`;
-      actionsHtml += `<button class="btn danger" type="submit" formaction="/posts/${post.id}/cancel" data-confirm="Cancel this post?">Cancel</button>`;
+      actionsHtml += `<button class="btn" type="submit" formaction="/posts/${post.id}/post-now" data-id="${post.id}" data-confirm="Publish to LinkedIn right now?">Post Now</button>`;
+      actionsHtml += `<button class="btn secondary" type="submit" formaction="/posts/${post.id}/update" data-id="${post.id}">Save Edits</button>`;
+      actionsHtml += `<button class="btn danger" type="submit" formaction="/posts/${post.id}/cancel" data-id="${post.id}" data-confirm="Cancel this post?">Cancel</button>`;
     } else if (post.status === 'posted' && post.linkedinPostUrl) {
       actionsHtml += `<a href="${post.linkedinPostUrl}" target="_blank" rel="noopener" class="btn secondary">View on LinkedIn &nearr;</a>`;
     }

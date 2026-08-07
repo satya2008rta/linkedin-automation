@@ -3,13 +3,9 @@ const router = express.Router();
 const storage = require('../services/storage.service');
 const requireValidToken = require('../middleware/requireValidToken');
 const gemini = require('../services/gemini.service');
-const { localInputToIso } = require('../utils/time');
+const { localInputToIso, autoSpaceTargetTime } = require('../utils/time');
 const logger = require('../utils/logger');
 
-// Shared by /update and /approve: the Calendar page submits Save/Approve/Discard from one
-// <form> (via formaction on each button) so edited content/media/schedule is never lost
-// just because Approve was clicked instead of Save — both routes need to apply the same
-// body fields before doing their own thing.
 function editFieldsFromBody(body) {
   if (!body) return {};
   const fields = {};
@@ -45,21 +41,35 @@ router.post('/settings', async (req, res, next) => {
 
 router.post('/generate-plan', async (req, res) => {
   try {
+    const { fromDate, toDate } = req.body;
     const settings = await storage.getSettings();
     const apiKey = gemini.resolveApiKey(settings);
     const token = await storage.getToken();
     const drafts = await gemini.generateMonthlyContentPlan(settings, {
       apiKey,
       displayName: token?.displayName,
-      daysAhead: 30,
+      fromDate: fromDate && fromDate.trim() ? fromDate.trim() : null,
+      toDate: toDate && toDate.trim() ? toDate.trim() : null,
     });
+
+    const allExisting = await storage.listPosts({});
+
     for (const draft of drafts) {
-      await storage.createPost({
+      const draftDateStr = draft.scheduledFor ? draft.scheduledFor.slice(0, 10) : '';
+      const existingOnDay = allExisting.filter((p) => {
+        const pDate = p.scheduledFor || p.postedAt || p.createdAt;
+        return pDate && pDate.slice(0, 10) === draftDateStr;
+      });
+
+      const autoScheduledFor = autoSpaceTargetTime(draft.scheduledFor, existingOnDay);
+
+      const created = await storage.createPost({
         content: draft.content,
-        scheduledFor: draft.scheduledFor,
+        scheduledFor: autoScheduledFor,
         status: 'draft',
         source: 'ai',
       });
+      allExisting.push(created);
     }
     req.flash('success', `Generated ${drafts.length} draft posts — review them below before they go live.`);
   } catch (err) {

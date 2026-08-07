@@ -15,24 +15,33 @@ const MAX_POST_CHARS = 3000; // LinkedIn's own commentary length ceiling
 
 class GeminiPlanError extends Error {}
 
-function buildPrompt(settings, { displayName, today, daysAhead }) {
+function buildPrompt(settings, { displayName, fromDate, toDate, daysAhead }) {
   const postsPerWeek = Number(settings.aiPostsPerWeek) || 3;
-  const approxCount = Math.max(4, Math.round((postsPerWeek * daysAhead) / 7));
+  const daysCount = daysAhead || 30;
+  const approxCount = Math.max(2, Math.round((postsPerWeek * daysCount) / 7));
+
+  const rangeInstruction = fromDate && toDate
+    ? `for the exact date range from ${fromDate} to ${toDate} (inclusive)`
+    : `for a ${daysCount}-day period starting from ${fromDate || 'tomorrow'}`;
+
+  const dateConstraint = fromDate && toDate
+    ? `strictly between ${fromDate} and ${toDate} (inclusive)`
+    : `between ${fromDate || 'tomorrow'} onwards`;
 
   return `You are a LinkedIn content strategist writing on behalf of ${displayName || 'a professional'}.
-Generate a ${daysAhead}-day LinkedIn content calendar starting the day after ${today} (today's date, ISO format).
+Generate a LinkedIn content calendar ${rangeInstruction}.
 
 Content pillars / topics: ${settings.aiTopics || '(not specified — use general professional development / industry commentary)'}
 Tone / voice: ${settings.aiTone || 'professional, approachable'}
 Target audience: ${settings.aiAudience || 'professional network / industry peers'}
-Desired cadence: about ${postsPerWeek} posts per week (~${approxCount} posts total across the ${daysAhead}-day period)
+Desired cadence: about ${postsPerWeek} posts per week (~${approxCount} posts total across the date range)
 Preferred posting times: ${settings.aiPreferredTimes || 'late morning on weekdays'}
 Extra instructions: ${settings.aiExtraInstructions || '(none)'}
 
 Rules:
 - Each post's "content" must be original, ready-to-publish LinkedIn post text (no markdown, no hashtag spam — at most 3 relevant hashtags at the end if natural).
 - Keep each post under ${MAX_POST_CHARS} characters.
-- Spread "suggestedDate" values across the full period, respecting the cadence, as ISO date strings (YYYY-MM-DD) strictly after ${today}.
+- Spread "suggestedDate" values across the date range ${dateConstraint}, as ISO date strings (YYYY-MM-DD).
 - "suggestedTime" should be a 24h "HH:mm" string matching the preferred posting times.
 - Vary the angle/format across posts (story, tip list, question, opinion, lesson learned) — don't repeat the same structure every time.
 - Return ONLY a JSON array, no surrounding prose, matching this shape:
@@ -59,7 +68,7 @@ function validateAndNormalize(rawItems) {
 }
 
 // Returns an array of { content, scheduledFor } ready to insert as draft posts.
-async function generateMonthlyContentPlan(settings, { apiKey, displayName, daysAhead = 30 }) {
+async function generateMonthlyContentPlan(settings, { apiKey, displayName, fromDate, toDate, daysAhead = 30 }) {
   if (!apiKey) {
     throw new GeminiPlanError('No Gemini API key configured. Add one in Settings first.');
   }
@@ -70,8 +79,15 @@ async function generateMonthlyContentPlan(settings, { apiKey, displayName, daysA
     generationConfig: { responseMimeType: 'application/json' },
   });
 
-  const today = new Date().toISOString().slice(0, 10);
-  const prompt = buildPrompt(settings, { displayName, today, daysAhead });
+  let calculatedDays = daysAhead;
+  if (fromDate && toDate) {
+    const diffMs = new Date(toDate).getTime() - new Date(fromDate).getTime();
+    if (diffMs >= 0) {
+      calculatedDays = Math.max(1, Math.round(diffMs / 86400000) + 1);
+    }
+  }
+
+  const prompt = buildPrompt(settings, { displayName, fromDate, toDate, daysAhead: calculatedDays });
 
   let text;
   try {
