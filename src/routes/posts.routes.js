@@ -6,7 +6,7 @@ const router = express.Router();
 const storage = require('../services/storage.service');
 const requireValidToken = require('../middleware/requireValidToken');
 const postRunner = require('../scheduler/postRunner');
-const { localInputToIso } = require('../utils/time');
+const { localInputToIso, autoSpaceTargetTime } = require('../utils/time');
 const { validateLocalImage, MediaValidationError } = require('../services/media.service');
 const logger = require('../utils/logger');
 
