@@ -81,9 +81,21 @@
     <h3 id="modal-title" style="margin-top:0;">Post Details</h3>
     <div id="modal-status-badge" style="margin-bottom:12px;"></div>
     <div id="modal-date" class="hint" style="margin-bottom:12px;"></div>
-    <div id="modal-content" style="white-space:pre-wrap; margin-bottom:16px; font-size:14px;"></div>
-    <div id="modal-media" class="hint" style="margin-bottom:16px;"></div>
-    <div id="modal-actions" style="display:flex; gap:8px; flex-wrap:wrap;"></div>
+
+    <form id="modal-post-form" method="POST" action="">
+      <input type="hidden" name="scheduledFor" id="modal-scheduled-input">
+      
+      <label style="display:block; font-size:12px; font-weight:600; margin-bottom:4px;">Post Content</label>
+      <textarea id="modal-content-input" name="content" style="width:100%; min-height:90px; font-size:14px; margin-bottom:12px; padding:8px; border:1px solid #c7c7c7; border-radius:4px; font-family:inherit;"></textarea>
+
+      <label style="display:block; font-size:12px; font-weight:600; margin-bottom:4px;">Image file path (optional)</label>
+      <div style="display:flex; gap:8px; margin-bottom:16px;">
+        <input type="text" id="modal-media-input" name="mediaPath" placeholder="C:\Users\you\Desktop\photo.jpg" style="flex:1; font-size:13px; padding:8px; border:1px solid #c7c7c7; border-radius:4px;">
+        <button type="button" class="btn secondary" data-browse-for="#modal-media-input" style="padding:6px 12px; font-size:13px;">Browse…</button>
+      </div>
+
+      <div id="modal-actions" style="display:flex; gap:8px; flex-wrap:wrap; margin-top:16px;"></div>
+    </form>
   </div>
 </div>
 
@@ -297,16 +309,27 @@
     document.getElementById('modal-status-badge').innerHTML = `<span class="status-pill ${post.status}">${post.status.replace('_',' ')}</span>`;
     const dateStr = post.postedAt ? `Posted: ${new Date(post.postedAt).toLocaleString()}` : `Scheduled: ${new Date(post.scheduledFor || post.createdAt).toLocaleString()}`;
     document.getElementById('modal-date').textContent = dateStr;
-    document.getElementById('modal-content').textContent = post.content;
-    document.getElementById('modal-media').textContent = post.mediaPath ? `📎 Attached Media: ${post.mediaPath}` : '';
+
+    const form = document.getElementById('modal-post-form');
+    const contentInput = document.getElementById('modal-content-input');
+    const mediaInput = document.getElementById('modal-media-input');
+    const scheduledInput = document.getElementById('modal-scheduled-input');
+
+    contentInput.value = post.content || '';
+    mediaInput.value = post.mediaPath || '';
+    scheduledInput.value = post.scheduledFor || post.createdAt || '';
 
     let actionsHtml = '';
     if (post.status === 'draft') {
-      actionsHtml += `<form method="POST" action="/ai/drafts/${post.id}/approve" style="display:inline;"><button class="btn" type="submit">Approve Draft</button></form>`;
-      actionsHtml += `<form method="POST" action="/ai/drafts/${post.id}/discard" style="display:inline;" data-confirm="Discard this draft?"><button class="btn danger" type="submit">Discard</button></form>`;
+      form.action = `/ai/drafts/${post.id}/approve`;
+      actionsHtml += `<button class="btn" type="submit" formaction="/ai/drafts/${post.id}/approve">Approve Draft</button>`;
+      actionsHtml += `<button class="btn secondary" type="submit" formaction="/ai/drafts/${post.id}/update">Save Edits</button>`;
+      actionsHtml += `<button class="btn danger" type="submit" formaction="/ai/drafts/${post.id}/discard" data-confirm="Discard this draft?">Discard</button>`;
     } else if (post.status === 'pending' || post.status === 'failed' || post.status === 'blocked_token_expired') {
-      actionsHtml += `<form method="POST" action="/posts/${post.id}/post-now" style="display:inline;" data-confirm="Publish to LinkedIn right now?"><button class="btn" type="submit">Post Now</button></form>`;
-      actionsHtml += `<a href="/queue" class="btn secondary">Edit in Queue &rarr;</a>`;
+      form.action = `/posts/${post.id}/update`;
+      actionsHtml += `<button class="btn" type="submit" formaction="/posts/${post.id}/post-now" data-confirm="Publish to LinkedIn right now?">Post Now</button>`;
+      actionsHtml += `<button class="btn secondary" type="submit" formaction="/posts/${post.id}/update">Save Edits</button>`;
+      actionsHtml += `<button class="btn danger" type="submit" formaction="/posts/${post.id}/cancel" data-confirm="Cancel this post?">Cancel</button>`;
     } else if (post.status === 'posted' && post.linkedinPostUrl) {
       actionsHtml += `<a href="${post.linkedinPostUrl}" target="_blank" rel="noopener" class="btn secondary">View on LinkedIn &nearr;</a>`;
     }
