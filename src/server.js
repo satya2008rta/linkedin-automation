@@ -11,6 +11,7 @@ const logger = require('./utils/logger');
 const errorHandler = require('./middleware/errorHandler');
 const routes = require('./routes');
 const { startScheduler } = require('./scheduler/cron');
+const { startAutoUpdateChecker } = require('./scheduler/autoUpdate');
 const time = require('./utils/time');
 
 const app = express();
@@ -66,4 +67,5 @@ app.use(errorHandler);
 app.listen(env.port, () => {
   logger.info(`LinkedIn Automation dashboard running at http://localhost:${env.port}`);
   startScheduler();
+  if (env.autoUpdate.enabled) startAutoUpdateChecker();
 });

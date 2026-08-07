@@ -6,6 +6,17 @@
         <p class="hint">Connect your LinkedIn account in <a href="/settings">Settings</a> before posting.</p>
       <% } %>
       <form method="POST" action="/posts" id="composeForm">
+        <label for="authorUrn">Post as</label>
+        <select name="authorUrn" id="authorUrn">
+          <option value="">Yourself<%= token && token.displayName ? ' (' + token.displayName + ')' : '' %></option>
+          <% organizations.forEach(function(org) { %>
+            <option value="<%= org.urn %>"><%= org.name %> (Company Page)</option>
+          <% }); %>
+        </select>
+        <% if (!organizations.length) { %>
+          <div class="hint">No company pages found. If you administer one, add it in <a href="/settings">Settings</a>.</div>
+        <% } %>
+
         <label for="content">Post text</label>
         <textarea name="content" id="content" maxlength="3000" placeholder="What do you want to share?"></textarea>
 
@@ -43,16 +54,23 @@
 <script src="/js/preview.js"></script>
 <script src="/js/dashboard.js"></script>
 <script>
-  const profile = {
+  const personProfile = {
     name: <%- JSON.stringify(token ? token.displayName : null) %>,
     headline: <%- JSON.stringify(token ? token.headline : null) %>,
     avatarUrl: <%- JSON.stringify(token ? token.pictureUrl : null) %>,
   };
-  const preview = LIPreview.mountPreview(document.getElementById('preview'), profile);
+  const orgNamesByUrn = <%- JSON.stringify(Object.fromEntries(organizations.map(function(o) { return [o.urn, o.name]; }))) %>;
+  const preview = LIPreview.mountPreview(document.getElementById('preview'), personProfile);
   const contentEl = document.getElementById('content');
   const mediaEl = document.getElementById('mediaPath');
-  function refresh() { preview.update(contentEl.value, mediaEl.value); }
+  const authorEl = document.getElementById('authorUrn');
+  function currentProfile() {
+    const orgName = orgNamesByUrn[authorEl.value];
+    return orgName ? { name: orgName, headline: 'Company Page', avatarUrl: null } : personProfile;
+  }
+  function refresh() { preview.update(contentEl.value, mediaEl.value, currentProfile()); }
   contentEl.addEventListener('input', refresh);
   mediaEl.addEventListener('input', refresh);
+  authorEl.addEventListener('change', refresh);
   refresh();
 </script>

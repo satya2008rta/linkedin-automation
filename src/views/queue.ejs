@@ -34,6 +34,14 @@
                content/media/schedule — e.g. fixing a failed post's text and clicking Retry
                no longer silently discards the fix. -->
           <form method="POST" action="/posts/<%= p.id %>/update" class="queue-form" data-id="<%= p.id %>">
+            <label>Post as</label>
+            <select name="authorUrn" class="queue-author">
+              <option value="" <%= p.authorType !== 'organization' ? 'selected' : '' %>>Yourself<%= token && token.displayName ? ' (' + token.displayName + ')' : '' %></option>
+              <% organizations.forEach(function(org) { %>
+                <option value="<%= org.urn %>" <%= p.authorUrn === org.urn ? 'selected' : '' %>><%= org.name %> (Company Page)</option>
+              <% }); %>
+            </select>
+
             <label>Content</label>
             <textarea name="content" class="queue-content"><%= p.content %></textarea>
 
@@ -89,6 +97,7 @@
     headline: <%- JSON.stringify(token ? token.headline : null) %>,
     avatarUrl: <%- JSON.stringify(token ? token.pictureUrl : null) %>,
   };
+  const orgNamesByUrn = <%- JSON.stringify(Object.fromEntries(organizations.map(function(o) { return [o.urn, o.name]; }))) %>;
   document.querySelectorAll('.queue-preview').forEach(function (container) {
     const id = container.dataset.id;
     const preview = LIPreview.mountPreview(container, profile);
@@ -96,9 +105,15 @@
       const form = document.querySelector('.queue-form[data-id="' + id + '"]');
       const contentEl = form.querySelector('.queue-content');
       const mediaEl = form.querySelector('.queue-media');
-      function refresh() { preview.update(contentEl.value, mediaEl.value); }
+      const authorEl = form.querySelector('.queue-author');
+      function refresh() {
+        const orgName = orgNamesByUrn[authorEl.value];
+        const override = orgName ? { name: orgName, headline: 'Company Page', avatarUrl: null } : undefined;
+        preview.update(contentEl.value, mediaEl.value, override);
+      }
       contentEl.addEventListener('input', refresh);
       mediaEl.addEventListener('input', refresh);
+      authorEl.addEventListener('change', refresh);
       refresh();
     } else {
       preview.update(container.dataset.content, container.dataset.media);

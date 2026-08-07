@@ -34,9 +34,11 @@
   }
 
   function mountPreview(container, profile) {
-    function update(content, mediaPath) {
+    // profileOverride lets a caller swap identity per-render (e.g. a "Post as" dropdown
+    // switching between your own profile and a Company Page) without re-mounting.
+    function update(content, mediaPath, profileOverride) {
       const mediaUrl = mediaPath && mediaPath.trim() ? `/posts/media-preview?path=${encodeURIComponent(mediaPath.trim())}` : null;
-      container.innerHTML = renderLinkedInPreview({ ...profile, content, mediaUrl });
+      container.innerHTML = renderLinkedInPreview({ ...profile, ...profileOverride, content, mediaUrl });
       const more = container.querySelector('.li-preview-more');
       const body = container.querySelector('.li-preview-body');
       if (more && body) {

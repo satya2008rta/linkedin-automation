@@ -2,6 +2,8 @@ const axios = require('axios');
 const { env } = require('../config/env');
 const { AUTH_BASE, USERINFO_URL, SCOPES } = require('../config/linkedin');
 const storage = require('./storage.service');
+const linkedinOrg = require('./linkedinOrg.service');
+const logger = require('../utils/logger');
 
 function buildAuthUrl(state) {
   const params = new URLSearchParams({
@@ -45,7 +47,7 @@ async function completeLogin(code) {
 
   const userInfo = await fetchUserInfo(tokenResponse.access_token);
 
-  return storage.saveToken({
+  const saved = await storage.saveToken({
     accessToken: tokenResponse.access_token,
     tokenType: tokenResponse.token_type || 'Bearer',
     scope: tokenResponse.scope || SCOPES.join(' '),
@@ -58,6 +60,30 @@ async function completeLogin(code) {
     expiresAt: expiresAt.toISOString(),
     lastAuthAt: obtainedAt.toISOString(),
   });
+
+  // Best-effort: refresh the list of Company Pages this member administers. Wrapped so a
+  // failure here (e.g. Community Management API was never approved for this app) doesn't
+  // block completing login — personal posting still works either way.
+  try {
+    const orgs = await linkedinOrg.listAdministeredOrganizations(tokenResponse.access_token);
+    await storage.replaceOrganizations(orgs);
+    logger.info(`Fetched ${orgs.length} administered organization(s) on reconnect.`);
+  } catch (err) {
+    logger.warn('Could not fetch administered organizations on reconnect:', err.message);
+  }
+
+  return saved;
 }
 
-module.exports = { buildAuthUrl, exchangeCodeForToken, fetchUserInfo, completeLogin };
+// For the Settings page's "Refresh company pages" button — re-fetches admin org list using
+// the already-stored token, no full re-auth needed (only useful if the token already has
+// the org scopes; if it doesn't, reconnecting is what's actually required).
+async function refreshOrganizations() {
+  const token = await storage.getToken();
+  if (!token?.accessToken) throw new Error('Not connected to LinkedIn.');
+  const orgs = await linkedinOrg.listAdministeredOrganizations(token.accessToken);
+  await storage.replaceOrganizations(orgs);
+  return orgs;
+}
+
+module.exports = { buildAuthUrl, exchangeCodeForToken, fetchUserInfo, completeLogin, refreshOrganizations };

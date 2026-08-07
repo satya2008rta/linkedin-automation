@@ -17,6 +17,21 @@
 </div>
 
 <div class="card">
+  <h2>Company Pages (post as a Page)</h2>
+  <p class="hint">Requires the Community Management API product on your LinkedIn app (linked/verified to the Page) plus reconnecting once it's added, so your token actually carries the org permissions.</p>
+  <% if (organizations.length) { %>
+    <ul>
+      <% organizations.forEach(function(org) { %>
+        <li><strong><%= org.name %></strong> <span class="hint"><%= org.urn %></span></li>
+      <% }); %>
+    </ul>
+  <% } else { %>
+    <p class="hint">No company pages found yet. If you just added Community Management API, click Reconnect above first — a page list only refreshes with a token that actually has the org scopes.</p>
+  <% } %>
+  <form method="POST" action="/auth/refresh-organizations"><button class="btn secondary" type="submit">Refresh company pages</button></form>
+</div>
+
+<div class="card">
   <h2>AI content planning (Gemini)</h2>
   <form method="POST" action="/ai/settings">
     <label for="geminiApiKey">Gemini API key</label>

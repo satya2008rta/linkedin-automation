@@ -74,8 +74,27 @@ CREATE TABLE IF NOT EXISTS settings (
   aiPreferredTimes TEXT,
   aiExtraInstructions TEXT
 );
+
+-- Company Pages the connected member administers (refreshed on reconnect / manual refresh).
+CREATE TABLE IF NOT EXISTS organizations (
+  urn TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  updatedAt TEXT NOT NULL
+);
 `;
 
 db.exec(SCHEMA);
+
+// Lightweight migration: CREATE TABLE IF NOT EXISTS doesn't add columns to a table that
+// already existed before this code shipped (this app has real user data in the wild, so
+// dropping/recreating the table isn't an option). Add the "post as a Page" columns only if
+// they're not already there.
+const postsColumns = db.prepare("PRAGMA table_info(posts)").all().map((c) => c.name);
+if (!postsColumns.includes('authorType')) {
+  db.exec("ALTER TABLE posts ADD COLUMN authorType TEXT NOT NULL DEFAULT 'person'");
+}
+if (!postsColumns.includes('authorUrn')) {
+  db.exec('ALTER TABLE posts ADD COLUMN authorUrn TEXT');
+}
 
 module.exports = db;

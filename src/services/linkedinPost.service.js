@@ -11,10 +11,13 @@ const { validateLocalImage } = require('./media.service');
 // that into a normal, visible failure instead.
 const REQUEST_TIMEOUT_MS = 30000;
 
-async function initializeImageUpload(personUrn, accessToken) {
+// `ownerUrn` is whoever the media/post will belong to — your personal urn:li:person:{id},
+// or a urn:li:organization:{id} if posting as a Company Page. LinkedIn requires the image's
+// owner to match the post's eventual author, so this can't just always be the person URN.
+async function initializeImageUpload(ownerUrn, accessToken) {
   const { data } = await axios.post(
     `${API_BASE}/images?action=initializeUpload`,
-    { initializeUploadRequest: { owner: personUrn } },
+    { initializeUploadRequest: { owner: ownerUrn } },
     { headers: restHeaders(accessToken, { 'Content-Type': 'application/json' }), timeout: REQUEST_TIMEOUT_MS }
   );
   // data.value: { uploadUrl, image (URN) }
@@ -32,17 +35,18 @@ async function uploadImageBinary(uploadUrl, filePath) {
 }
 
 // Uploads a local image and returns its LinkedIn image URN, ready to attach to a post.
-async function uploadImage(personUrn, accessToken, filePath) {
+async function uploadImage(ownerUrn, accessToken, filePath) {
   validateLocalImage(filePath);
-  const { uploadUrl, image } = await initializeImageUpload(personUrn, accessToken);
+  const { uploadUrl, image } = await initializeImageUpload(ownerUrn, accessToken);
   await uploadImageBinary(uploadUrl, filePath);
   return image; // e.g. urn:li:image:C4E10AQ...
 }
 
-// Creates a post (text, optionally with one attached image). Returns { urn, url }.
-async function createPost({ personUrn, accessToken, commentary, visibility = 'PUBLIC', imageUrn = null }) {
+// Creates a post (text, optionally with one attached image). `authorUrn` is a person or
+// organization URN — see publishPostRecord for how that's chosen. Returns { urn, url }.
+async function createPost({ authorUrn, accessToken, commentary, visibility = 'PUBLIC', imageUrn = null }) {
   const body = {
-    author: personUrn,
+    author: authorUrn,
     commentary,
     visibility,
     distribution: {
@@ -69,16 +73,23 @@ async function createPost({ personUrn, accessToken, commentary, visibility = 'PU
   return { urn, url };
 }
 
-// End-to-end: given a `posts` row (content/mediaPath/mediaType/visibility) plus the
-// current token, uploads media if present and creates the LinkedIn post. Used by both the
-// manual "Post Now" route and the scheduler's postRunner so the two paths can't drift.
+// End-to-end: given a `posts` row (content/mediaPath/mediaType/visibility/authorType/
+// authorUrn) plus the current token, uploads media if present and creates the LinkedIn
+// post under the right author. Used by both the manual "Post Now" route and the
+// scheduler's postRunner so the two paths can't drift.
 async function publishPostRecord(post, token) {
+  // Default to posting as yourself; only use the stored org URN when the post was
+  // explicitly set to post as an organization (see storage.service.js's createPost/
+  // updatePost, which also null out authorUrn whenever authorType is 'person' so a stale
+  // org URN can never leak through here).
+  const authorUrn = post.authorType === 'organization' && post.authorUrn ? post.authorUrn : token.personUrn;
+
   let imageUrn = null;
   if (post.mediaType === 'image' && post.mediaPath) {
-    imageUrn = await uploadImage(token.personUrn, token.accessToken, post.mediaPath);
+    imageUrn = await uploadImage(authorUrn, token.accessToken, post.mediaPath);
   }
   return createPost({
-    personUrn: token.personUrn,
+    authorUrn,
     accessToken: token.accessToken,
     commentary: post.content,
     visibility: post.visibility || 'PUBLIC',

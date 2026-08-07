@@ -48,4 +48,24 @@ router.post('/logout', async (req, res) => {
   res.redirect('/settings');
 });
 
+// Re-fetches the list of Company Pages you administer using the already-connected token —
+// useful after LinkedIn approves a scope or you're added as an admin on a new page, without
+// needing a full reconnect. If the current token predates the org scopes entirely, this
+// will just come back empty; a full Reconnect is what's actually needed in that case.
+router.post('/refresh-organizations', async (req, res) => {
+  try {
+    const orgs = await linkedinAuth.refreshOrganizations();
+    req.flash(
+      'success',
+      orgs.length > 0
+        ? `Found ${orgs.length} company page(s) you administer.`
+        : 'No company pages found for the current connection — if you expected some, try Reconnect instead.'
+    );
+  } catch (err) {
+    logger.error('Refresh organizations failed:', err.response?.data || err.message);
+    req.flash('error', `Could not refresh company pages: ${err.response?.data?.message || err.message}`);
+  }
+  res.redirect('/settings');
+});
+
 module.exports = router;

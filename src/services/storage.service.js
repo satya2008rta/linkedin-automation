@@ -107,8 +107,8 @@ async function createPost(post) {
   const ts = nowIso();
   const info = db
     .prepare(
-      `INSERT INTO posts (content, mediaPath, mediaType, visibility, scheduledFor, status, source, attempts, createdAt, updatedAt)
-       VALUES (@content, @mediaPath, @mediaType, @visibility, @scheduledFor, @status, @source, 0, @createdAt, @updatedAt)`
+      `INSERT INTO posts (content, mediaPath, mediaType, visibility, scheduledFor, status, source, authorType, authorUrn, attempts, createdAt, updatedAt)
+       VALUES (@content, @mediaPath, @mediaType, @visibility, @scheduledFor, @status, @source, @authorType, @authorUrn, 0, @createdAt, @updatedAt)`
     )
     .run({
       content: post.content,
@@ -118,6 +118,11 @@ async function createPost(post) {
       scheduledFor: post.scheduledFor ?? null,
       status: post.status ?? 'pending',
       source: post.source ?? 'manual',
+      // Who the post goes out as: 'person' (default, your own profile) or 'organization'
+      // (a Company Page you administer) — see linkedinOrg.service.js for how pages are
+      // discovered. authorUrn is only meaningful when authorType is 'organization'.
+      authorType: post.authorType ?? 'person',
+      authorUrn: post.authorType === 'organization' ? post.authorUrn ?? null : null,
       createdAt: ts,
       updatedAt: ts,
     });
@@ -154,6 +159,8 @@ async function updatePost(id, fields) {
     'scheduledFor',
     'status',
     'source',
+    'authorType',
+    'authorUrn',
     'attempts',
     'lastError',
     'lockedAt',
@@ -163,9 +170,12 @@ async function updatePost(id, fields) {
     'postedAt',
   ]);
   merged.id = id;
+  // Don't let a stale org URN survive a switch back to posting as yourself.
+  if (merged.authorType === 'person') merged.authorUrn = null;
   db.prepare(
     `UPDATE posts SET content=@content, mediaPath=@mediaPath, mediaType=@mediaType, visibility=@visibility,
-       scheduledFor=@scheduledFor, status=@status, source=@source, attempts=@attempts, lastError=@lastError,
+       scheduledFor=@scheduledFor, status=@status, source=@source, authorType=@authorType, authorUrn=@authorUrn,
+       attempts=@attempts, lastError=@lastError,
        lockedAt=@lockedAt, linkedinPostUrn=@linkedinPostUrn, linkedinPostUrl=@linkedinPostUrl,
        updatedAt=@updatedAt, postedAt=@postedAt
      WHERE id=@id`
@@ -285,6 +295,31 @@ async function listEngagements() {
   return db.prepare('SELECT * FROM engagements ORDER BY createdAt DESC').all();
 }
 
+// ---- organizations (Company Pages the connected member administers) ----
+
+// Wholesale replace rather than upsert-and-diff: the list only ever comes from a fresh
+// LinkedIn lookup (reconnect or manual refresh), so stale rows (pages you're no longer an
+// admin of) should disappear rather than linger.
+async function replaceOrganizations(orgs) {
+  const ts = nowIso();
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    db.exec('DELETE FROM organizations');
+    const insert = db.prepare('INSERT INTO organizations (urn, name, updatedAt) VALUES (@urn, @name, @updatedAt)');
+    for (const org of orgs) {
+      insert.run({ urn: org.urn, name: org.name, updatedAt: ts });
+    }
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+}
+
+async function listOrganizations() {
+  return db.prepare('SELECT * FROM organizations ORDER BY name ASC').all();
+}
+
 module.exports = {
   getToken,
   saveToken,
@@ -304,4 +339,6 @@ module.exports = {
   getEngagement,
   updateEngagement,
   listEngagements,
+  replaceOrganizations,
+  listOrganizations,
 };

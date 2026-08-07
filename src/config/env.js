@@ -27,6 +27,15 @@ const env = {
   geminiApiKeyFallback: required('GEMINI_API_KEY', ''),
 
   dbPath: path.join(__dirname, '..', '..', 'data', 'app.db'),
+
+  // Opt-in, off by default: only turn this on for a deployment meant to run unattended and
+  // auto-update itself from `origin/main` (e.g. a machine you leave running as a server).
+  // Left off on a normal dev machine so it never surprises you with an unexpected restart
+  // mid-session.
+  autoUpdate: {
+    enabled: required('AUTO_UPDATE_ENABLED', 'false') === 'true',
+    intervalMinutes: Number(required('AUTO_UPDATE_INTERVAL_MINUTES', 30)),
+  },
 };
 
 function assertLinkedInConfigured() {

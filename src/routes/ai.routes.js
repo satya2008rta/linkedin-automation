@@ -21,6 +21,10 @@ function editFieldsFromBody(body) {
     const iso = localInputToIso(body.scheduledFor);
     if (iso) fields.scheduledFor = iso;
   }
+  if (body.authorUrn !== undefined) {
+    fields.authorType = body.authorUrn && body.authorUrn.trim() ? 'organization' : 'person';
+    fields.authorUrn = body.authorUrn && body.authorUrn.trim() ? body.authorUrn.trim() : null;
+  }
   return fields;
 }
 

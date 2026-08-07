@@ -29,7 +29,8 @@ router.get('/', async (req, res, next) => {
 router.get('/compose', async (req, res, next) => {
   try {
     const token = await storage.getToken();
-    res.render('compose', { title: 'Compose', active: 'compose', token, post: null });
+    const organizations = await storage.listOrganizations();
+    res.render('compose', { title: 'Compose', active: 'compose', token, post: null, organizations });
   } catch (err) {
     next(err);
   }
@@ -40,7 +41,8 @@ router.get('/queue', async (req, res, next) => {
     const posts = await storage.listPosts({});
     const queued = posts.filter((p) => p.status !== 'draft' && p.status !== 'posted');
     const token = await storage.getToken();
-    res.render('queue', { title: 'Queue', active: 'queue', posts: queued, token });
+    const organizations = await storage.listOrganizations();
+    res.render('queue', { title: 'Queue', active: 'queue', posts: queued, token, organizations });
   } catch (err) {
     next(err);
   }
@@ -71,6 +73,7 @@ router.get('/calendar', async (req, res, next) => {
     const allPosts = await storage.listPosts({});
     const settings = await storage.getSettings();
     const token = await storage.getToken();
+    const organizations = await storage.listOrganizations();
 
     const now = new Date();
     const reqYear = parseInt(req.query.year, 10) || now.getFullYear();
@@ -92,6 +95,7 @@ router.get('/calendar', async (req, res, next) => {
       days,
       settings,
       token,
+      organizations,
       year: reqYear,
       month: reqMonth,
     });
@@ -104,7 +108,15 @@ router.get('/settings', async (req, res, next) => {
   try {
     const token = await storage.getToken();
     const settings = await storage.getSettings();
-    res.render('settings', { title: 'Settings', active: 'settings', token, settings, redirectUri: env.linkedin.redirectUri });
+    const organizations = await storage.listOrganizations();
+    res.render('settings', {
+      title: 'Settings',
+      active: 'settings',
+      token,
+      settings,
+      organizations,
+      redirectUri: env.linkedin.redirectUri,
+    });
   } catch (err) {
     next(err);
   }

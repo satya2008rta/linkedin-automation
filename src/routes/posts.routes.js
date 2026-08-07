@@ -20,7 +20,7 @@ const EDITABLE_STATUSES = new Set(['pending', 'failed', 'blocked_token_expired']
 // instead of Save — both routes need to apply the same body fields before doing their own
 // thing. Returns null if content is blank, which callers treat as a validation failure.
 function editFieldsFromBody(body) {
-  const { content, mediaPath, visibility, scheduledFor } = body;
+  const { content, mediaPath, visibility, scheduledFor, authorUrn } = body;
   if (!content || !content.trim()) return null;
   const trimmedMedia = mediaPath && mediaPath.trim() ? mediaPath.trim() : null;
   const fields = {
@@ -28,6 +28,10 @@ function editFieldsFromBody(body) {
     mediaPath: trimmedMedia,
     mediaType: trimmedMedia ? 'image' : 'none',
     visibility: visibility || 'PUBLIC',
+    // "Post as" select sends either "person" or an org URN as its value — see compose.ejs/
+    // queue.ejs. Empty/"person" means posting as yourself.
+    authorType: authorUrn && authorUrn.trim() ? 'organization' : 'person',
+    authorUrn: authorUrn && authorUrn.trim() ? authorUrn.trim() : null,
   };
   const iso = localInputToIso(scheduledFor);
   if (iso) fields.scheduledFor = iso; // omit rather than pass undefined — see updatePost's spread merge
@@ -105,7 +109,7 @@ router.get('/browse-file', (req, res) => {
 // Create a post — either scheduled for later, or published immediately ("Post Now").
 router.post('/', requireValidToken, async (req, res, next) => {
   try {
-    const { content, mediaPath, visibility, scheduledFor, action } = req.body;
+    const { content, mediaPath, visibility, scheduledFor, action, authorUrn } = req.body;
     if (!content || !content.trim()) {
       req.flash('error', 'Post content cannot be empty.');
       return res.redirect('/compose');
@@ -128,6 +132,9 @@ router.post('/', requireValidToken, async (req, res, next) => {
       scheduledFor: scheduledIso,
       status: 'pending',
       source: 'manual',
+      // "Post as" select on Compose sends either empty ("post as yourself") or an org URN.
+      authorType: authorUrn && authorUrn.trim() ? 'organization' : 'person',
+      authorUrn: authorUrn && authorUrn.trim() ? authorUrn.trim() : null,
     });
 
     if (isNow) {

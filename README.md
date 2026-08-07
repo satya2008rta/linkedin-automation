@@ -44,6 +44,25 @@ Get a Gemini API key from [Google AI Studio](https://aistudio.google.com/apikey)
 
 An in-process `node-cron` job checks every minute for posts whose `scheduledFor` time has passed, claims them (so a manual "Post Now" click and the cron tick can never double-post the same row), and publishes them. This only runs **while the app process is running** — if you close the terminal, scheduled posts pause until you restart it. For unattended operation across reboots, consider running it with [PM2](https://pm2.keymetrics.io/) or as a Windows service.
 
+## Auto-update (for a machine you leave running as a server)
+
+If you're running this on a second PC that stays on and just runs the app continuously, you can have it pull and apply your GitHub pushes automatically instead of manually updating that machine. It's **off by default** — turn it on only on that machine, not your normal dev machine, so it doesn't restart itself out from under you mid-session.
+
+In `.env` on that machine:
+```
+AUTO_UPDATE_ENABLED=true
+AUTO_UPDATE_INTERVAL_MINUTES=30
+```
+
+Every interval, it:
+1. `git fetch`es `origin/main` and compares against local `HEAD`.
+2. Skips the cycle if there are uncommitted local changes to tracked files (won't overwrite them), or if a post is currently mid-publish (won't restart while that's in flight — safe by design, not just by luck: see the stale-lock handling in `storage.service.js`).
+3. Otherwise `git pull --ff-only`s, runs `npm install` if `package.json`/`package-lock.json` changed, and restarts itself via the batch launcher.
+
+Requirements: that machine's copy of this folder needs to be an actual git clone of your GitHub repo (not just a copied folder) with `git`/`npm` on PATH, and read access to the repo (a public repo needs nothing extra; a private one needs `git` configured with a credential that can pull it, e.g. a PAT or an authenticated `gh`/Git Credential Manager).
+
+This checks on a timer rather than reacting to the push instantly — good enough for a personal tool, at the cost of up to `AUTO_UPDATE_INTERVAL_MINUTES` of lag after a push. If that lag ever bothers you, the proper fix is a self-hosted GitHub Actions runner on that machine (reacts to pushes immediately, no port-forwarding needed since it polls GitHub outbound) — ask if you want that built instead.
+
 ## Project layout
 
 ```
