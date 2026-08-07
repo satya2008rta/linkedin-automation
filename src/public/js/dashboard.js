@@ -23,16 +23,33 @@ document.addEventListener('click', async (e) => {
 
   const originalLabel = button.textContent;
   button.disabled = true;
-  button.textContent = 'Waiting for file dialog…';
+  button.textContent = 'Opening dialog…';
+
   try {
-    const res = await fetch('/posts/browse-file');
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 60000); // 60s timeout for user to pick file
+
+    const res = await fetch('/posts/browse-file', { signal: controller.signal });
+    clearTimeout(timer);
     const data = await res.json();
     if (data.path) {
       input.value = data.path;
       input.dispatchEvent(new Event('input', { bubbles: true }));
     }
-  } catch {
-    window.alert('Could not open the file picker — check the server console for details.');
+  } catch (err) {
+    // If native PowerShell dialog wasn't available, trigger browser file picker fallback
+    const fileChooser = document.createElement('input');
+    fileChooser.type = 'file';
+    fileChooser.accept = 'image/*';
+    fileChooser.onchange = (ev) => {
+      const file = ev.target.files[0];
+      if (file && file.name) {
+        // Populate input with selected filename/path
+        input.value = file.path || file.name;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    };
+    fileChooser.click();
   } finally {
     button.disabled = false;
     button.textContent = originalLabel;

@@ -58,14 +58,10 @@ router.get('/media-preview', (req, res) => {
 router.get('/browse-file', (req, res) => {
   const script = [
     'Add-Type -AssemblyName System.Windows.Forms',
-    '[System.Windows.Forms.Application]::EnableVisualStyles()',
     '$d = New-Object System.Windows.Forms.OpenFileDialog',
     "$d.Filter = 'Image files (*.jpg;*.jpeg;*.png;*.gif)|*.jpg;*.jpeg;*.png;*.gif|All files (*.*)|*.*'",
     "$d.Title = 'Select an image to attach'",
-    '$f = New-Object System.Windows.Forms.Form',
-    '$f.TopMost = $true',
-    "if ($d.ShowDialog($f) -eq [System.Windows.Forms.DialogResult]::OK) { Write-Output $d.FileName }",
-    '$f.Dispose()',
+    "if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { Write-Output $d.FileName }",
   ].join('; ');
 
   execFile(
