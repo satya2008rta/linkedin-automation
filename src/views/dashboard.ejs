@@ -1,0 +1,57 @@
+<div class="two-col">
+  <div class="col">
+    <div class="card">
+      <h2>At a glance</h2>
+      <table>
+        <tr><td>Pending in queue</td><td><strong><%= pending.length %></strong></td></tr>
+        <tr><td>AI drafts awaiting review</td><td><strong><%= drafts.length %></strong> <% if (drafts.length) { %>— <a href="/calendar">review →</a><% } %></td></tr>
+        <tr><td>Failed</td><td><strong><%= failed.length %></strong></td></tr>
+      </table>
+      <% if (!tokenStatus.connected) { %>
+        <p class="hint">You're not connected to LinkedIn yet. <a href="/settings">Connect your account →</a></p>
+      <% } else if (tokenStatus.expired) { %>
+        <p class="hint" style="color:#b31b1b;">Your LinkedIn token has expired. <a href="/settings">Reconnect →</a></p>
+      <% } %>
+      <div style="margin-top:14px; display:flex; gap:10px;">
+        <a class="btn" href="/compose">Compose a post</a>
+        <a class="btn secondary" href="/calendar">Generate AI plan</a>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Recently posted</h2>
+      <% if (!posted.length) { %>
+        <p class="hint">Nothing published yet.</p>
+      <% } else { %>
+        <table>
+          <thead><tr><th>Content</th><th>Posted</th><th></th></tr></thead>
+          <tbody>
+            <% posted.forEach(function(p) { %>
+              <tr>
+                <td><%= p.content.length > 100 ? p.content.slice(0,100) + '…' : p.content %></td>
+                <td><%= friendlyDate(p.postedAt) %></td>
+                <td><% if (p.linkedinPostUrl) { %><a href="<%= p.linkedinPostUrl %>" target="_blank" rel="noopener">View →</a><% } %></td>
+              </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      <% } %>
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="card">
+      <h2>Recent engagements</h2>
+      <% if (!engagements.length) { %>
+        <p class="hint">No likes/comments logged yet. <a href="/engage">Engage with a post →</a></p>
+      <% } else { %>
+        <% engagements.forEach(function(e) { %>
+          <div style="padding:8px 0; border-bottom:1px solid var(--border); font-size:13px;">
+            <span class="status-pill <%= e.status === 'done' ? 'posted' : e.status === 'failed' ? 'failed' : 'pending' %>"><%= e.status %></span>
+            <strong><%= e.action %></strong> on <a href="<%= e.sourceUrl %>" target="_blank" rel="noopener">post</a>
+          </div>
+        <% }); %>
+      <% } %>
+    </div>
+  </div>
+</div>

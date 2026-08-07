@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node -e \"const {DatabaseSync} = require\\('node:sqlite'\\); const db = new DatabaseSync\\(':memory:'\\); db.exec\\('CREATE TABLE t \\(a\\)'\\); console.log\\('node:sqlite works, node version', process.version\\);\")",
+      "Bash(node -e ' *)",
+      "Bash(curl -s -i -X POST \"http://localhost:3000/posts\" -d \"content=hello&action=schedule&scheduledFor=2026-08-07T10:00\")",
+      "Bash(curl -s \"http://localhost:3000/settings\")",
+      "Bash(curl -s -i -X POST \"http://localhost:3000/posts\" -d \"content=Testing+the+pipeline&action=schedule&scheduledFor=2020-01-01T10:00\" -c /tmp/cookies.txt)",
+      "Bash(curl -s \"http://localhost:3000/queue\")",
+      "Bash(curl -s -i -X POST \"http://localhost:3000/posts/1/cancel\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" \"http://localhost:3000/posts/media-preview?path=C:\\\\\\\\nonexistent.jpg\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" \"http://localhost:3000/posts/media-preview?path=$\\(pwd\\)/package.json\")",
+      "Bash(curl -s -i -X POST \"http://localhost:3000/ai/generate-plan\")",
+      "Bash(curl -s -c /tmp/c.txt -b /tmp/c.txt \"http://localhost:3000/ai/generate-plan\" -X POST)",
+      "Bash(curl -s -b /tmp/c.txt \"http://localhost:3000/calendar\")"
+    ]
+  }
+}

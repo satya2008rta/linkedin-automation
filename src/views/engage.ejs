@@ -1,0 +1,44 @@
+<div class="card">
+  <h2>Engage with a post</h2>
+  <p class="hint">LinkedIn's API has no feed/search access at this tier, so paste the URL of a specific post you want to like or comment on (use "Copy link to post" from the post's ⋯ menu on LinkedIn).</p>
+  <% if (!tokenStatus.connected || tokenStatus.expired) { %>
+    <p class="hint">Connect your LinkedIn account in <a href="/settings">Settings</a> first.</p>
+  <% } %>
+  <form method="POST" action="/engagement">
+    <label for="sourceUrl">Post URL</label>
+    <input type="text" name="sourceUrl" id="sourceUrl" required placeholder="https://www.linkedin.com/posts/...-activity-1234567890123456789-AbCd/">
+
+    <label style="display:flex; align-items:center; gap:8px; font-weight:400;">
+      <input type="checkbox" name="doLike" style="width:auto;" checked> Like this post
+    </label>
+
+    <label for="commentText">Comment (optional)</label>
+    <textarea name="commentText" id="commentText" placeholder="Leave a comment…"></textarea>
+
+    <div style="margin-top:16px;"><button type="submit" class="btn">Engage</button></div>
+  </form>
+</div>
+
+<div class="card">
+  <h2>History</h2>
+  <% if (!engagements.length) { %>
+    <p class="hint">Nothing yet.</p>
+  <% } else { %>
+    <table>
+      <thead><tr><th>Post</th><th>Action</th><th>Status</th><th>When</th></tr></thead>
+      <tbody>
+        <% engagements.forEach(function(e) { %>
+          <tr>
+            <td><a href="<%= e.sourceUrl %>" target="_blank" rel="noopener"><%= e.sourceUrl.length > 60 ? e.sourceUrl.slice(0,60)+'…' : e.sourceUrl %></a>
+              <% if (e.commentText) { %><div class="hint">💬 <%= e.commentText %></div><% } %>
+              <% if (e.error) { %><div class="hint" style="color:#b31b1b;">⚠ <%= e.error %></div><% } %>
+            </td>
+            <td><%= e.action %></td>
+            <td><span class="status-pill <%= e.status === 'done' ? 'posted' : e.status === 'failed' ? 'failed' : 'pending' %>"><%= e.status %></span></td>
+            <td><%= friendlyDate(e.createdAt) %></td>
+          </tr>
+        <% }); %>
+      </tbody>
+    </table>
+  <% } %>
+</div>

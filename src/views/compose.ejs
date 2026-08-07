@@ -1,0 +1,58 @@
+<div class="two-col">
+  <div class="col">
+    <div class="card">
+      <h2>Compose a post</h2>
+      <% if (!tokenStatus.connected || tokenStatus.expired) { %>
+        <p class="hint">Connect your LinkedIn account in <a href="/settings">Settings</a> before posting.</p>
+      <% } %>
+      <form method="POST" action="/posts" id="composeForm">
+        <label for="content">Post text</label>
+        <textarea name="content" id="content" maxlength="3000" placeholder="What do you want to share?"></textarea>
+
+        <label for="mediaPath">Image file path (optional)</label>
+        <div style="display:flex; gap:8px;">
+          <input type="text" name="mediaPath" id="mediaPath" placeholder="C:\Users\you\Desktop\photo.jpg" style="flex:1;">
+          <button type="button" class="btn secondary" data-browse-for="#mediaPath">Browse…</button>
+        </div>
+        <div class="hint">Absolute path to a local jpg/png/gif on this machine. It's read at post time, so it just needs to exist by then.</div>
+
+        <label for="visibility">Visibility</label>
+        <select name="visibility" id="visibility">
+          <option value="PUBLIC">Public</option>
+          <option value="CONNECTIONS">Connections only</option>
+        </select>
+
+        <label for="scheduledFor">Schedule for (leave blank + use "Post Now" to publish immediately)</label>
+        <input type="datetime-local" name="scheduledFor" id="scheduledFor">
+
+        <div style="margin-top:16px; display:flex; gap:10px;">
+          <button type="submit" name="action" value="schedule" class="btn secondary">Schedule</button>
+          <button type="submit" name="action" value="now" class="btn">Post Now</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  <div class="col">
+    <div class="card">
+      <h2>Preview</h2>
+      <div id="preview"></div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/preview.js"></script>
+<script src="/js/dashboard.js"></script>
+<script>
+  const profile = {
+    name: <%- JSON.stringify(token ? token.displayName : null) %>,
+    headline: <%- JSON.stringify(token ? token.headline : null) %>,
+    avatarUrl: <%- JSON.stringify(token ? token.pictureUrl : null) %>,
+  };
+  const preview = LIPreview.mountPreview(document.getElementById('preview'), profile);
+  const contentEl = document.getElementById('content');
+  const mediaEl = document.getElementById('mediaPath');
+  function refresh() { preview.update(contentEl.value, mediaEl.value); }
+  contentEl.addEventListener('input', refresh);
+  mediaEl.addEventListener('input', refresh);
+  refresh();
+</script>

@@ -1,0 +1,85 @@
+const express = require('express');
+const router = express.Router();
+const storage = require('../services/storage.service');
+const { env } = require('../config/env');
+
+router.get('/', async (req, res, next) => {
+  try {
+    const [pending, posted, failed, drafts, engagements] = await Promise.all([
+      storage.listPosts({ status: 'pending' }),
+      storage.listPosts({ status: 'posted' }),
+      storage.listPosts({ status: 'failed' }),
+      storage.listPosts({ status: 'draft' }),
+      storage.listEngagements(),
+    ]);
+    res.render('dashboard', {
+      title: 'Dashboard',
+      active: 'dashboard',
+      pending,
+      posted: posted.slice(-5).reverse(),
+      failed,
+      drafts,
+      engagements: engagements.slice(0, 5),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/compose', async (req, res, next) => {
+  try {
+    const token = await storage.getToken();
+    res.render('compose', { title: 'Compose', active: 'compose', token, post: null });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/queue', async (req, res, next) => {
+  try {
+    const posts = await storage.listPosts({});
+    const queued = posts.filter((p) => p.status !== 'draft');
+    const token = await storage.getToken();
+    res.render('queue', { title: 'Queue', active: 'queue', posts: queued, token });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/engage', async (req, res, next) => {
+  try {
+    const engagements = await storage.listEngagements();
+    res.render('engage', { title: 'Engage', active: 'engage', engagements });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/calendar', async (req, res, next) => {
+  try {
+    const drafts = await storage.listPosts({ status: 'draft' });
+    const settings = await storage.getSettings();
+    const token = await storage.getToken();
+    const byDate = {};
+    for (const d of drafts) {
+      const key = (d.scheduledFor || d.createdAt).slice(0, 10);
+      (byDate[key] = byDate[key] || []).push(d);
+    }
+    const days = Object.keys(byDate).sort();
+    res.render('calendar', { title: 'AI Calendar', active: 'calendar', byDate, days, settings, token });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/settings', async (req, res, next) => {
+  try {
+    const token = await storage.getToken();
+    const settings = await storage.getSettings();
+    res.render('settings', { title: 'Settings', active: 'settings', token, settings, redirectUri: env.linkedin.redirectUri });
+  } catch (err) {
+    next(err);
+  }
+});
+
+module.exports = router;

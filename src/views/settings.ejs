@@ -1,0 +1,54 @@
+<div class="card">
+  <h2>LinkedIn connection</h2>
+  <% if (tokenStatus.connected && !tokenStatus.expired) { %>
+    <p>Connected as <strong><%= token.displayName %></strong> (<%= token.email %>).</p>
+    <p class="hint">Token expires <%= friendlyDate(token.expiresAt) %>. LinkedIn's Default Tier doesn't issue refresh tokens, so you'll need to reconnect when it gets close.</p>
+    <form method="POST" action="/auth/logout" style="display:inline;"><button class="btn secondary" type="submit">Disconnect</button></form>
+    <a class="btn secondary" href="/auth/linkedin">Reconnect / refresh</a>
+  <% } else { %>
+    <% if (tokenStatus.connected && tokenStatus.expired) { %>
+      <p style="color:#b31b1b;">Your token expired on <%= friendlyDate(token.expiresAt) %>.</p>
+    <% } else { %>
+      <p class="hint">Not connected yet.</p>
+    <% } %>
+    <a class="btn" href="/auth/linkedin">Connect LinkedIn account</a>
+    <p class="hint">Requires a LinkedIn Developer app with the "Sign In with LinkedIn using OpenID Connect" and "Share on LinkedIn" products enabled, and <code><%= redirectUri %></code> registered under Auth → Authorized redirect URLs.</p>
+  <% } %>
+</div>
+
+<div class="card">
+  <h2>AI content planning (Gemini)</h2>
+  <form method="POST" action="/ai/settings">
+    <label for="geminiApiKey">Gemini API key</label>
+    <input type="password" name="geminiApiKey" id="geminiApiKey" placeholder="<%= settings.geminiApiKey ? '•••••••••••••••• (saved — leave blank to keep)' : 'Paste your Gemini API key' %>" autocomplete="off">
+    <div class="hint">Get a key from <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a>. Never re-displayed once saved.</div>
+
+    <div class="form-row">
+      <div>
+        <label for="aiTopics">Topics / content pillars</label>
+        <input type="text" name="aiTopics" id="aiTopics" value="<%= settings.aiTopics || '' %>" placeholder="e.g. product management, career growth, AI tools">
+      </div>
+      <div>
+        <label for="aiAudience">Target audience</label>
+        <input type="text" name="aiAudience" id="aiAudience" value="<%= settings.aiAudience || '' %>" placeholder="e.g. early-career PMs, recruiters">
+      </div>
+    </div>
+    <div class="form-row">
+      <div>
+        <label for="aiTone">Tone / voice</label>
+        <input type="text" name="aiTone" id="aiTone" value="<%= settings.aiTone || '' %>" placeholder="e.g. candid, story-driven, a bit witty">
+      </div>
+      <div>
+        <label for="aiPostsPerWeek">Posts per week</label>
+        <input type="number" name="aiPostsPerWeek" id="aiPostsPerWeek" min="1" max="14" value="<%= settings.aiPostsPerWeek || 3 %>">
+      </div>
+    </div>
+    <label for="aiPreferredTimes">Preferred posting times</label>
+    <input type="text" name="aiPreferredTimes" id="aiPreferredTimes" value="<%= settings.aiPreferredTimes || '' %>" placeholder="e.g. weekday mornings around 9am">
+
+    <label for="aiExtraInstructions">Extra instructions</label>
+    <textarea name="aiExtraInstructions" id="aiExtraInstructions" placeholder="Anything else Gemini should know — things to avoid, recent projects to mention, etc."><%= settings.aiExtraInstructions || '' %></textarea>
+
+    <div style="margin-top:16px;"><button type="submit" class="btn">Save AI settings</button></div>
+  </form>
+</div>

@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= typeof title !== 'undefined' ? title + ' · LinkedIn Automation' : 'LinkedIn Automation' %></title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="app-shell">
+    <div class="sidebar">
+      <h1>LinkedIn Automation</h1>
+      <% const badge = tokenStatus.connected ? (tokenStatus.expired ? 'red' : (tokenStatus.daysRemaining <= 14 ? 'amber' : 'green')) : 'red'; %>
+      <div class="token-badge <%= badge %>">
+        <% if (!tokenStatus.connected) { %>
+          ● Not connected
+        <% } else if (tokenStatus.expired) { %>
+          ● Token expired
+        <% } else { %>
+          ● Connected · <%= tokenStatus.daysRemaining %>d left
+        <% } %>
+      </div>
+      <nav>
+        <a href="/" class="<%= active === 'dashboard' ? 'active' : '' %>">Dashboard</a>
+        <a href="/compose" class="<%= active === 'compose' ? 'active' : '' %>">Compose</a>
+        <a href="/queue" class="<%= active === 'queue' ? 'active' : '' %>">Queue</a>
+        <a href="/calendar" class="<%= active === 'calendar' ? 'active' : '' %>">AI Calendar</a>
+        <a href="/engage" class="<%= active === 'engage' ? 'active' : '' %>">Engage</a>
+        <a href="/settings" class="<%= active === 'settings' ? 'active' : '' %>">Settings</a>
+      </nav>
+    </div>
+    <div class="main">
+      <% if (messages.error && messages.error.length) { %>
+        <% messages.error.forEach(function(m) { %><div class="flash error"><%= m %></div><% }); %>
+      <% } %>
+      <% if (messages.success && messages.success.length) { %>
+        <% messages.success.forEach(function(m) { %><div class="flash success"><%= m %></div><% }); %>
+      <% } %>
+      <%- body %>
+    </div>
+  </div>
+</body>
+</html>

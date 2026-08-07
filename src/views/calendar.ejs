@@ -1,0 +1,71 @@
+<div class="card">
+  <h2>AI Content Calendar</h2>
+  <p class="hint">Generates a month of draft posts from your <a href="/settings">AI settings</a>. Nothing is scheduled or published until you review and approve each draft individually.</p>
+  <% if (!settings.geminiApiKey) { %>
+    <p class="hint" style="color:#b31b1b;">No Gemini API key saved yet — add one in <a href="/settings">Settings</a> first.</p>
+  <% } %>
+  <form method="POST" action="/ai/generate-plan">
+    <button type="submit" class="btn" <%= settings.geminiApiKey ? '' : 'disabled' %>>Generate month plan</button>
+  </form>
+</div>
+
+<% if (!days.length) { %>
+  <div class="card"><p class="hint">No AI drafts yet. Generate a plan above.</p></div>
+<% } %>
+
+<% days.forEach(function(day) { %>
+  <div class="calendar-day">
+    <div class="calendar-day-date"><%= day %></div>
+    <% byDate[day].forEach(function(draft) { %>
+      <div class="two-col" style="margin-bottom:18px; padding-bottom:18px; border-bottom:1px solid var(--border);">
+        <div class="col">
+          <!-- One shared form for Save/Approve/Discard (via formaction on each button) so
+               whichever button is clicked always submits the current, possibly-edited
+               content/media/schedule — clicking Approve without clicking Save first no
+               longer silently discards unsaved edits. -->
+          <form method="POST" action="/ai/drafts/<%= draft.id %>/update" class="draft-form" data-id="<%= draft.id %>">
+            <label>Content</label>
+            <textarea name="content" class="draft-content"><%= draft.content %></textarea>
+            <label>Image file path (optional)</label>
+            <div style="display:flex; gap:8px;">
+              <input type="text" name="mediaPath" id="draft-media-<%= draft.id %>" class="draft-media" value="<%= draft.mediaPath || '' %>" placeholder="C:\Users\you\Desktop\photo.jpg" style="flex:1;">
+              <button type="button" class="btn secondary" data-browse-for="#draft-media-<%= draft.id %>">Browse…</button>
+            </div>
+            <div class="hint">Attach a local jpg/png/gif — read at post time, same as Compose. Leave blank for a text-only post.</div>
+            <label>Scheduled for</label>
+            <input type="datetime-local" name="scheduledFor" class="draft-scheduled" value="<%= isoToLocalInput(draft.scheduledFor) %>">
+            <div style="margin-top:10px; display:flex; gap:8px;">
+              <button type="submit" formaction="/ai/drafts/<%= draft.id %>/update" class="btn secondary">Save edits</button>
+              <button type="submit" formaction="/ai/drafts/<%= draft.id %>/approve" class="btn">Approve</button>
+              <button type="submit" formaction="/ai/drafts/<%= draft.id %>/discard" class="btn danger" data-confirm="Discard this draft?">Discard</button>
+            </div>
+          </form>
+        </div>
+        <div class="col">
+          <div class="draft-preview" data-id="<%= draft.id %>"></div>
+        </div>
+      </div>
+    <% }); %>
+  </div>
+<% }); %>
+
+<script src="/js/preview.js"></script>
+<script src="/js/dashboard.js"></script>
+<script>
+  const profile = {
+    name: <%- JSON.stringify(token ? token.displayName : null) %>,
+    headline: <%- JSON.stringify(token ? token.headline : null) %>,
+    avatarUrl: <%- JSON.stringify(token ? token.pictureUrl : null) %>,
+  };
+  document.querySelectorAll('.draft-preview').forEach(function (container) {
+    const id = container.dataset.id;
+    const form = document.querySelector('.draft-form[data-id="' + id + '"]');
+    const contentEl = form.querySelector('.draft-content');
+    const mediaEl = form.querySelector('.draft-media');
+    const preview = LIPreview.mountPreview(container, profile);
+    function refresh() { preview.update(contentEl.value, mediaEl.value); }
+    contentEl.addEventListener('input', refresh);
+    mediaEl.addEventListener('input', refresh);
+    refresh();
+  });
+</script>

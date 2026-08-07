@@ -1,0 +1,107 @@
+<div class="card">
+  <h2>Post Queue</h2>
+  <% if (!posts.length) { %>
+    <p class="hint">Nothing here yet. <a href="/compose">Compose a post</a> or generate one with the <a href="/calendar">AI Calendar</a>.</p>
+  <% } %>
+</div>
+
+<% posts.forEach(function(p) {
+  const editable = p.status === 'pending' || p.status === 'failed' || p.status === 'blocked_token_expired';
+%>
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
+      <div>
+        <span class="status-pill <%= p.status %>"><%= p.status.replace('_',' ') %></span>
+        <span class="hint">&nbsp;<%= p.source %> &middot; scheduled <%= friendlyDate(p.scheduledFor) %></span>
+      </div>
+      <% if (!editable) { %>
+        <div style="display:flex; gap:8px;">
+          <% if (p.status === 'pending' || p.status === 'failed' || p.status === 'blocked_token_expired') { %>
+            <form method="POST" action="/posts/<%= p.id %>/cancel" data-confirm="Cancel this post?"><button class="btn danger" type="submit">Cancel</button></form>
+          <% } %>
+        </div>
+      <% } %>
+    </div>
+
+    <% if (p.linkedinPostUrl) { %><p class="hint">✅ <a href="<%= p.linkedinPostUrl %>" target="_blank" rel="noopener">View on LinkedIn →</a></p><% } %>
+    <% if (p.lastError) { %><p class="hint" style="color:#b31b1b;">⚠ <%= p.lastError %></p><% } %>
+
+    <div class="two-col">
+      <div class="col">
+        <% if (editable) { %>
+          <!-- One shared form for Save/Retry/Cancel (via formaction on each button) so
+               whichever button is clicked always submits the current, possibly-edited
+               content/media/schedule — e.g. fixing a failed post's text and clicking Retry
+               no longer silently discards the fix. -->
+          <form method="POST" action="/posts/<%= p.id %>/update" class="queue-form" data-id="<%= p.id %>">
+            <label>Content</label>
+            <textarea name="content" class="queue-content"><%= p.content %></textarea>
+
+            <label>Image file path (optional)</label>
+            <div style="display:flex; gap:8px;">
+              <input type="text" name="mediaPath" id="queue-media-<%= p.id %>" class="queue-media" value="<%= p.mediaPath || '' %>" placeholder="C:\Users\you\Desktop\photo.jpg" style="flex:1;">
+              <button type="button" class="btn secondary" data-browse-for="#queue-media-<%= p.id %>">Browse…</button>
+            </div>
+
+            <div class="form-row">
+              <div>
+                <label>Visibility</label>
+                <select name="visibility">
+                  <option value="PUBLIC" <%= p.visibility === 'PUBLIC' ? 'selected' : '' %>>Public</option>
+                  <option value="CONNECTIONS" <%= p.visibility === 'CONNECTIONS' ? 'selected' : '' %>>Connections only</option>
+                </select>
+              </div>
+              <div>
+                <label>Scheduled for</label>
+                <input type="datetime-local" name="scheduledFor" value="<%= isoToLocalInput(p.scheduledFor) %>">
+              </div>
+            </div>
+
+            <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap;">
+              <button type="submit" formaction="/posts/<%= p.id %>/update" class="btn secondary">Save changes</button>
+              <button type="submit" formaction="/posts/<%= p.id %>/post-now" class="btn" data-confirm="Publish this post to LinkedIn right now?">Post Now</button>
+              <% if (p.status === 'failed' || p.status === 'blocked_token_expired') { %>
+                <button type="submit" formaction="/posts/<%= p.id %>/retry" class="btn secondary">Save &amp; Retry (~1 min)</button>
+              <% } %>
+              <button type="submit" formaction="/posts/<%= p.id %>/cancel" class="btn danger" data-confirm="Cancel this post?">Cancel</button>
+            </div>
+            <div class="hint" style="margin-top:6px;">"Post Now" publishes immediately to LinkedIn. "Save changes" updates details without posting.</div>
+          </form>
+        <% } else { %>
+          <p style="white-space:pre-wrap;"><%= p.content %></p>
+          <% if (p.mediaPath) { %><p class="hint">📎 <%= p.mediaPath %></p><% } %>
+          <p class="hint"><%= p.status === 'posting' ? 'Currently being published — editing is locked until this finishes.' : 'Already published — no longer editable here.' %></p>
+        <% } %>
+      </div>
+      <div class="col">
+        <div class="queue-preview" data-id="<%= p.id %>" data-editable="<%= editable %>"
+             data-content="<%= p.content %>" data-media="<%= p.mediaPath || '' %>"></div>
+      </div>
+    </div>
+  </div>
+<% }); %>
+
+<script src="/js/preview.js"></script>
+<script src="/js/dashboard.js"></script>
+<script>
+  const profile = {
+    name: <%- JSON.stringify(token ? token.displayName : null) %>,
+    headline: <%- JSON.stringify(token ? token.headline : null) %>,
+    avatarUrl: <%- JSON.stringify(token ? token.pictureUrl : null) %>,
+  };
+  document.querySelectorAll('.queue-preview').forEach(function (container) {
+    const id = container.dataset.id;
+    const preview = LIPreview.mountPreview(container, profile);
+    if (container.dataset.editable === 'true') {
+      const form = document.querySelector('.queue-form[data-id="' + id + '"]');
+      const contentEl = form.querySelector('.queue-content');
+      const mediaEl = form.querySelector('.queue-media');
+      function refresh() { preview.update(contentEl.value, mediaEl.value); }
+      contentEl.addEventListener('input', refresh);
+      mediaEl.addEventListener('input', refresh);
+      refresh();
+    } else {
+      preview.update(container.dataset.content, container.dataset.media);
+    }
+  });
+</script>
