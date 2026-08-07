@@ -68,16 +68,33 @@ router.get('/engage', async (req, res, next) => {
 
 router.get('/calendar', async (req, res, next) => {
   try {
-    const drafts = await storage.listPosts({ status: 'draft' });
+    const allPosts = await storage.listPosts({});
     const settings = await storage.getSettings();
     const token = await storage.getToken();
+
+    const now = new Date();
+    const reqYear = parseInt(req.query.year, 10) || now.getFullYear();
+    const reqMonth = parseInt(req.query.month, 10) || (now.getMonth() + 1);
+
+    const drafts = allPosts.filter((p) => p.status === 'draft');
     const byDate = {};
     for (const d of drafts) {
       const key = (d.scheduledFor || d.createdAt).slice(0, 10);
       (byDate[key] = byDate[key] || []).push(d);
     }
     const days = Object.keys(byDate).sort();
-    res.render('calendar', { title: 'AI Calendar', active: 'calendar', byDate, days, settings, token });
+
+    res.render('calendar', {
+      title: 'AI Calendar',
+      active: 'calendar',
+      allPosts,
+      byDate,
+      days,
+      settings,
+      token,
+      year: reqYear,
+      month: reqMonth,
+    });
   } catch (err) {
     next(err);
   }

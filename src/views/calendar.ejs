@@ -9,8 +9,37 @@
   </form>
 </div>
 
+<!-- Outlook Style Interactive Monthly Calendar -->
+<div class="outlook-calendar">
+  <div class="outlook-header">
+    <div class="outlook-title">
+      <span id="cal-month-title">Calendar</span>
+      <div style="display:inline-flex; gap:6px; margin-left:12px;">
+        <button type="button" class="btn secondary" id="prev-month-btn" style="padding:4px 10px; font-size:12px;">&larr; Prev</button>
+        <button type="button" class="btn secondary" id="today-btn" style="padding:4px 10px; font-size:12px;">Today</button>
+        <button type="button" class="btn secondary" id="next-month-btn" style="padding:4px 10px; font-size:12px;">Next &rarr;</button>
+      </div>
+    </div>
+    <div class="outlook-legend">
+      <span class="legend-item"><span class="legend-dot posted"></span> Posted</span>
+      <span class="legend-item"><span class="legend-dot pending"></span> Queued</span>
+      <span class="legend-item"><span class="legend-dot draft"></span> AI Draft</span>
+      <span class="legend-item"><span class="legend-dot failed"></span> Failed</span>
+    </div>
+  </div>
+
+  <div class="outlook-grid" id="outlook-calendar-grid">
+    <!-- Rendered via JavaScript -->
+  </div>
+</div>
+
+<div class="card" style="margin-top: 24px;">
+  <h2>AI Drafts Review</h2>
+  <p class="hint">Review and edit generated drafts below before approving them into your queue.</p>
+</div>
+
 <% if (!days.length) { %>
-  <div class="card"><p class="hint">No AI drafts yet. Generate a plan above.</p></div>
+  <div class="card"><p class="hint">No AI drafts awaiting review yet. Generate a plan above.</p></div>
 <% } %>
 
 <% days.forEach(function(day) { %>
@@ -19,10 +48,6 @@
     <% byDate[day].forEach(function(draft) { %>
       <div class="two-col" style="margin-bottom:18px; padding-bottom:18px; border-bottom:1px solid var(--border);">
         <div class="col">
-          <!-- One shared form for Save/Approve/Discard (via formaction on each button) so
-               whichever button is clicked always submits the current, possibly-edited
-               content/media/schedule — clicking Approve without clicking Save first no
-               longer silently discards unsaved edits. -->
           <form method="POST" action="/ai/drafts/<%= draft.id %>/update" class="draft-form" data-id="<%= draft.id %>">
             <label>Content</label>
             <textarea name="content" class="draft-content"><%= draft.content %></textarea>
@@ -49,6 +74,19 @@
   </div>
 <% }); %>
 
+<!-- Event Detail Modal -->
+<div id="event-modal" class="modal-overlay" style="display:none;">
+  <div class="modal-card">
+    <span class="modal-close" onclick="closeEventModal()">&times;</span>
+    <h3 id="modal-title" style="margin-top:0;">Post Details</h3>
+    <div id="modal-status-badge" style="margin-bottom:12px;"></div>
+    <div id="modal-date" class="hint" style="margin-bottom:12px;"></div>
+    <div id="modal-content" style="white-space:pre-wrap; margin-bottom:16px; font-size:14px;"></div>
+    <div id="modal-media" class="hint" style="margin-bottom:16px;"></div>
+    <div id="modal-actions" style="display:flex; gap:8px; flex-wrap:wrap;"></div>
+  </div>
+</div>
+
 <script src="/js/preview.js"></script>
 <script src="/js/dashboard.js"></script>
 <script>
@@ -57,9 +95,153 @@
     headline: <%- JSON.stringify(token ? token.headline : null) %>,
     avatarUrl: <%- JSON.stringify(token ? token.pictureUrl : null) %>,
   };
+
+  const allPosts = <%- JSON.stringify(allPosts || []) %>;
+  let currentYear = <%= year %>;
+  let currentMonth = <%= month %>; // 1-based (1 = Jan, 8 = Aug)
+
+  const monthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+
+  function getPostDateKey(post) {
+    const raw = post.postedAt || post.scheduledFor || post.createdAt;
+    if (!raw) return '';
+    const d = new Date(raw);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
+  function renderOutlookCalendar(year, month) {
+    const grid = document.getElementById('outlook-calendar-grid');
+    const title = document.getElementById('cal-month-title');
+    title.textContent = `${monthNames[month - 1]} ${year}`;
+
+    // Index posts by YYYY-MM-DD
+    const postsByDate = {};
+    allPosts.forEach(p => {
+      const key = getPostDateKey(p);
+      if (key) {
+        (postsByDate[key] = postsByDate[key] || []).push(p);
+      }
+    });
+
+    const firstDayIndex = new Date(year, month - 1, 1).getDay(); // 0 = Sun
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const daysInPrevMonth = new Date(year, month - 1, 0).getDate();
+
+    let html = '';
+    const dayHeaders = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    dayHeaders.forEach(dh => {
+      html += `<div class="outlook-day-header">${dh}</div>`;
+    });
+
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+    // Total cells in grid (usually 35 or 42)
+    const totalCells = Math.ceil((firstDayIndex + daysInMonth) / 7) * 7;
+
+    for (let i = 0; i < totalCells; i++) {
+      let dayNum, isOtherMonth = false, cellYear = year, cellMonth = month;
+      if (i < firstDayIndex) {
+        dayNum = daysInPrevMonth - firstDayIndex + i + 1;
+        isOtherMonth = true;
+        cellMonth = month - 1;
+        if (cellMonth === 0) { cellMonth = 12; cellYear--; }
+      } else if (i >= firstDayIndex + daysInMonth) {
+        dayNum = i - (firstDayIndex + daysInMonth) + 1;
+        isOtherMonth = true;
+        cellMonth = month + 1;
+        if (cellMonth === 13) { cellMonth = 1; cellYear++; }
+      } else {
+        dayNum = i - firstDayIndex + 1;
+      }
+
+      const dateStr = `${cellYear}-${String(cellMonth).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+      const isToday = dateStr === todayStr;
+      const dayPosts = postsByDate[dateStr] || [];
+
+      html += `<div class="outlook-day-cell ${isOtherMonth ? 'other-month' : ''} ${isToday ? 'today' : ''}">`;
+      html += `<div class="outlook-day-number">${dayNum}</div>`;
+      html += `<div class="outlook-events">`;
+
+      dayPosts.forEach(p => {
+        let labelIcon = '📝';
+        if (p.status === 'posted') labelIcon = '✓';
+        else if (p.status === 'pending') labelIcon = '⏳';
+        else if (p.status === 'failed' || p.status === 'blocked_token_expired') labelIcon = '⚠';
+
+        const snippet = p.content.length > 25 ? p.content.slice(0, 25) + '…' : p.content;
+        html += `<div class="event-pill ${p.status}" onclick="openEventModal(${p.id})">${labelIcon} ${snippet}</div>`;
+      });
+
+      html += `</div></div>`;
+    }
+
+    grid.innerHTML = html;
+  }
+
+  document.getElementById('prev-month-btn').addEventListener('click', () => {
+    currentMonth--;
+    if (currentMonth === 0) { currentMonth = 12; currentYear--; }
+    renderOutlookCalendar(currentYear, currentMonth);
+  });
+
+  document.getElementById('next-month-btn').addEventListener('click', () => {
+    currentMonth++;
+    if (currentMonth === 13) { currentMonth = 1; currentYear++; }
+    renderOutlookCalendar(currentYear, currentMonth);
+  });
+
+  document.getElementById('today-btn').addEventListener('click', () => {
+    const n = new Date();
+    currentYear = n.getFullYear();
+    currentMonth = n.getMonth() + 1;
+    renderOutlookCalendar(currentYear, currentMonth);
+  });
+
+  function openEventModal(postId) {
+    const post = allPosts.find(p => p.id === postId);
+    if (!post) return;
+
+    document.getElementById('modal-title').textContent = post.status.toUpperCase() + ' POST';
+    document.getElementById('modal-status-badge').innerHTML = `<span class="status-pill ${post.status}">${post.status.replace('_',' ')}</span>`;
+    const dateStr = post.postedAt ? `Posted: ${new Date(post.postedAt).toLocaleString()}` : `Scheduled: ${new Date(post.scheduledFor || post.createdAt).toLocaleString()}`;
+    document.getElementById('modal-date').textContent = dateStr;
+    document.getElementById('modal-content').textContent = post.content;
+    document.getElementById('modal-media').textContent = post.mediaPath ? `📎 Attached Media: ${post.mediaPath}` : '';
+
+    let actionsHtml = '';
+    if (post.status === 'draft') {
+      actionsHtml += `<form method="POST" action="/ai/drafts/${post.id}/approve" style="display:inline;"><button class="btn" type="submit">Approve Draft</button></form>`;
+      actionsHtml += `<form method="POST" action="/ai/drafts/${post.id}/discard" style="display:inline;" data-confirm="Discard this draft?"><button class="btn danger" type="submit">Discard</button></form>`;
+    } else if (post.status === 'pending' || post.status === 'failed' || post.status === 'blocked_token_expired') {
+      actionsHtml += `<form method="POST" action="/posts/${post.id}/post-now" style="display:inline;" data-confirm="Publish to LinkedIn right now?"><button class="btn" type="submit">Post Now</button></form>`;
+      actionsHtml += `<a href="/queue" class="btn secondary">Edit in Queue &rarr;</a>`;
+    } else if (post.status === 'posted' && post.linkedinPostUrl) {
+      actionsHtml += `<a href="${post.linkedinPostUrl}" target="_blank" rel="noopener" class="btn secondary">View on LinkedIn &nearr;</a>`;
+    }
+
+    document.getElementById('modal-actions').innerHTML = actionsHtml;
+    document.getElementById('event-modal').style.display = 'flex';
+  }
+
+  function closeEventModal() {
+    document.getElementById('event-modal').style.display = 'none';
+  }
+
+  // Initial calendar render
+  renderOutlookCalendar(currentYear, currentMonth);
+
+  // Mount draft previews
   document.querySelectorAll('.draft-preview').forEach(function (container) {
     const id = container.dataset.id;
     const form = document.querySelector('.draft-form[data-id="' + id + '"]');
+    if (!form) return;
     const contentEl = form.querySelector('.draft-content');
     const mediaEl = form.querySelector('.draft-media');
     const preview = LIPreview.mountPreview(container, profile);
