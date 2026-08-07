@@ -18,7 +18,8 @@ document.addEventListener('click', (e) => {
   if (!button) return;
   e.preventDefault();
 
-  const input = document.querySelector(button.getAttribute('data-browse-for'));
+  const inputSelector = button.getAttribute('data-browse-for');
+  const input = document.querySelector(inputSelector);
   if (!input) return;
 
   let fileInput = document.getElementById('global-file-picker');
@@ -35,45 +36,42 @@ document.addEventListener('click', (e) => {
     const file = event.target.files && event.target.files[0];
     if (!file) return;
 
-    if (file.path) {
-      input.value = file.path;
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-      fileInput.value = '';
-      return;
-    }
-
     const originalLabel = button.textContent;
     button.disabled = true;
     button.textContent = 'Processing image…';
 
     try {
-      const reader = new FileReader();
-      reader.onload = async () => {
-        try {
-          const base64Data = reader.result.split(',')[1];
-          const res = await fetch('/posts/upload-media', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ filename: file.name, base64Data }),
-          });
-          const data = await res.json();
-          if (data.path) {
-            input.value = data.path;
-            input.dispatchEvent(new Event('input', { bubbles: true }));
-          }
-        } catch (uploadErr) {
-          console.error('File upload failed:', uploadErr);
-        } finally {
-          button.disabled = false;
-          button.textContent = originalLabel;
+      if (file.path) {
+        input.value = file.path;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      } else {
+        const base64Data = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result.split(',')[1]);
+          reader.onerror = (err) => reject(err);
+          reader.readAsDataURL(file);
+        });
+
+        const res = await fetch('/posts/upload-media', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filename: file.name, base64Data }),
+        });
+        const data = await res.json();
+        if (data.path) {
+          input.value = data.path;
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          input.dispatchEvent(new Event('change', { bubbles: true }));
         }
-      };
-      reader.readAsDataURL(file);
+      }
     } catch (err) {
+      console.error('Failed to select file:', err);
+    } finally {
       button.disabled = false;
       button.textContent = originalLabel;
+      fileInput.value = '';
     }
-    fileInput.value = '';
   };
 
   fileInput.click();
