@@ -43,6 +43,7 @@ document.addEventListener('click', (e) => {
     try {
       if (file.path) {
         input.value = file.path;
+        input.setAttribute('value', file.path);
         input.dispatchEvent(new Event('input', { bubbles: true }));
         input.dispatchEvent(new Event('change', { bubbles: true }));
       } else {
@@ -58,15 +59,21 @@ document.addEventListener('click', (e) => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ filename: file.name, base64Data }),
         });
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(`Upload failed (${res.status}): ${text}`);
+        }
         const data = await res.json();
         if (data.path) {
           input.value = data.path;
+          input.setAttribute('value', data.path);
           input.dispatchEvent(new Event('input', { bubbles: true }));
           input.dispatchEvent(new Event('change', { bubbles: true }));
         }
       }
     } catch (err) {
       console.error('Failed to select file:', err);
+      alert('File selection failed: ' + (err.message || err));
     } finally {
       button.disabled = false;
       button.textContent = originalLabel;
