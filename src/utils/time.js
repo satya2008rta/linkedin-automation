@@ -20,6 +20,12 @@ function isoToLocalInput(iso) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+function friendly(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return `${format(d, 'MMM d, yyyy p')} (${formatDistanceToNow(d, { addSuffix: true })})`;
+}
+
 const EIGHT_HOURS_MS = 8 * 60 * 60 * 1000;
 
 function isWithin8Hours(isoA, isoB) {
