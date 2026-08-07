@@ -4,11 +4,17 @@ const logger = require('../utils/logger');
 function errorHandler(err, req, res, next) {
   logger.error(err.stack || err.message || err);
   const status = err.status || 500;
-  if (req.flash) req.flash('error', err.userMessage || err.message || 'Something went wrong.');
+  const message = err.userMessage || err.message || 'Something went wrong.';
+
+  if (req.path.startsWith('/posts/') || req.headers.accept?.includes('application/json') || req.xhr) {
+    return res.status(status).json({ error: message });
+  }
+
+  if (req.flash) req.flash('error', message);
   if (req.accepts('html')) {
     return res.redirect(req.get('Referrer') || '/');
   }
-  res.status(status).json({ error: err.userMessage || err.message || 'Something went wrong.' });
+  res.status(status).json({ error: message });
 }
 
 module.exports = errorHandler;

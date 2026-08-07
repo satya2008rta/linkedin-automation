@@ -56,14 +56,23 @@ document.addEventListener('click', (e) => {
 
         const res = await fetch('/posts/upload-media', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
           body: JSON.stringify({ filename: file.name, base64Data }),
         });
-        if (!res.ok) {
-          const text = await res.text();
-          throw new Error(`Upload failed (${res.status}): ${text}`);
+
+        const contentType = res.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) {
+          throw new Error(`Server returned status ${res.status}. Please restart your node server (npm run dev or node src/server.js) to load the new upload route.`);
         }
+
         const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || `Upload failed with status ${res.status}`);
+        }
+
         if (data.path) {
           input.value = data.path;
           input.setAttribute('value', data.path);
@@ -73,7 +82,7 @@ document.addEventListener('click', (e) => {
       }
     } catch (err) {
       console.error('Failed to select file:', err);
-      alert('File selection failed: ' + (err.message || err));
+      alert('File selection error: ' + (err.message || err));
     } finally {
       button.disabled = false;
       button.textContent = originalLabel;
