@@ -11,11 +11,20 @@ const logger = require('../utils/logger');
 // just because Approve was clicked instead of Save — both routes need to apply the same
 // body fields before doing their own thing.
 function editFieldsFromBody(body) {
-  const { content, scheduledFor, mediaPath } = body;
-  const trimmedMedia = mediaPath && mediaPath.trim() ? mediaPath.trim() : null;
-  const fields = { content, mediaPath: trimmedMedia, mediaType: trimmedMedia ? 'image' : 'none' };
-  const iso = localInputToIso(scheduledFor);
-  if (iso) fields.scheduledFor = iso; // omit entirely rather than pass undefined — see updatePost's spread merge
+  if (!body) return {};
+  const fields = {};
+  if (body.content !== undefined && body.content !== null && body.content.trim() !== '') {
+    fields.content = body.content.trim();
+  }
+  if (body.mediaPath !== undefined && body.mediaPath !== null) {
+    const trimmedMedia = body.mediaPath.trim() ? body.mediaPath.trim() : null;
+    fields.mediaPath = trimmedMedia;
+    fields.mediaType = trimmedMedia ? 'image' : 'none';
+  }
+  if (body.scheduledFor) {
+    const iso = localInputToIso(body.scheduledFor);
+    if (iso) fields.scheduledFor = iso;
+  }
   return fields;
 }
 
@@ -62,7 +71,10 @@ router.post('/generate-plan', async (req, res) => {
 
 router.post('/drafts/:id/update', async (req, res, next) => {
   try {
-    await storage.updatePost(Number(req.params.id), editFieldsFromBody(req.body));
+    const fields = editFieldsFromBody(req.body);
+    if (Object.keys(fields).length > 0) {
+      await storage.updatePost(Number(req.params.id), fields);
+    }
     req.flash('success', 'Draft updated.');
     res.redirect('/calendar');
   } catch (err) {
@@ -77,9 +89,18 @@ router.post('/drafts/:id/approve', requireValidToken, async (req, res, next) => 
       req.flash('error', 'Draft not found.');
       return res.redirect('/calendar');
     }
-    // Apply whatever's currently in the form (including any unsaved edit) before flipping
-    // status, so Approve reflects what's on screen right now, not the last-saved version.
-    await storage.updatePost(post.id, { ...editFieldsFromBody(req.body), status: 'pending' });
+    const fields = editFieldsFromBody(req.body);
+    const finalContent = fields.content || post.content;
+    if (!finalContent || !finalContent.trim()) {
+      req.flash('error', 'Post content cannot be empty.');
+      return res.redirect('/calendar');
+    }
+
+    await storage.updatePost(post.id, {
+      ...fields,
+      content: finalContent,
+      status: 'pending',
+    });
     req.flash('success', 'Approved — it will publish at its scheduled time.');
     res.redirect('/calendar');
   } catch (err) {
