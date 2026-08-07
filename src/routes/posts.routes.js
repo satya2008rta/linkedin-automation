@@ -1,5 +1,6 @@
 const express = require('express');
 const fs = require('fs');
+const path = require('path');
 const { execFile } = require('child_process');
 const router = express.Router();
 const storage = require('../services/storage.service');
@@ -45,6 +46,29 @@ router.get('/media-preview', (req, res) => {
   } catch (err) {
     if (err instanceof MediaValidationError) return res.status(404).end();
     throw err;
+  }
+});
+
+// Uploads a local image file directly from the browser file chooser into data/uploads/
+// and returns the real absolute path on disk so mediaPath is populated cleanly and reliably.
+router.post('/upload-media', express.json({ limit: '30mb' }), (req, res) => {
+  try {
+    const { filename, base64Data } = req.body;
+    if (!filename || !base64Data) {
+      return res.status(400).json({ error: 'Filename and base64Data required.' });
+    }
+    const uploadsDir = path.join(process.cwd(), 'data', 'uploads');
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+    const safeName = `${Date.now()}_${path.basename(filename).replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+    const targetPath = path.join(uploadsDir, safeName);
+    const buffer = Buffer.from(base64Data, 'base64');
+    fs.writeFileSync(targetPath, buffer);
+    res.json({ path: targetPath });
+  } catch (err) {
+    logger.error('Upload media failed:', err);
+    res.status(500).json({ error: 'Failed to save media file.' });
   }
 });
 

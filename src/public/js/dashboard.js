@@ -13,7 +13,7 @@ document.addEventListener('submit', (e) => {
 // "Browse..." buttons next to a mediaPath text input: <button data-browse-for="#someInput">.
 // Opens a native OS file picker server-side (see GET /posts/browse-file) and fills in the
 // real absolute path, then fires an 'input' event so any live preview picks up the change.
-document.addEventListener('click', async (e) => {
+document.addEventListener('click', (e) => {
   const button = e.target.closest('[data-browse-for]');
   if (!button) return;
   e.preventDefault();
@@ -21,37 +21,60 @@ document.addEventListener('click', async (e) => {
   const input = document.querySelector(button.getAttribute('data-browse-for'));
   if (!input) return;
 
-  const originalLabel = button.textContent;
-  button.disabled = true;
-  button.textContent = 'Opening dialog…';
-
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 60000); // 60s timeout for user to pick file
-
-    const res = await fetch('/posts/browse-file', { signal: controller.signal });
-    clearTimeout(timer);
-    const data = await res.json();
-    if (data.path) {
-      input.value = data.path;
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-    }
-  } catch (err) {
-    // If native PowerShell dialog wasn't available, trigger browser file picker fallback
-    const fileChooser = document.createElement('input');
-    fileChooser.type = 'file';
-    fileChooser.accept = 'image/*';
-    fileChooser.onchange = (ev) => {
-      const file = ev.target.files[0];
-      if (file && file.name) {
-        // Populate input with selected filename/path
-        input.value = file.path || file.name;
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-      }
-    };
-    fileChooser.click();
-  } finally {
-    button.disabled = false;
-    button.textContent = originalLabel;
+  let fileInput = document.getElementById('global-file-picker');
+  if (!fileInput) {
+    fileInput = document.createElement('input');
+    fileInput.id = 'global-file-picker';
+    fileInput.type = 'file';
+    fileInput.accept = 'image/jpeg,image/png,image/gif';
+    fileInput.style.display = 'none';
+    document.body.appendChild(fileInput);
   }
+
+  fileInput.onchange = async (event) => {
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+
+    if (file.path) {
+      input.value = file.path;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      fileInput.value = '';
+      return;
+    }
+
+    const originalLabel = button.textContent;
+    button.disabled = true;
+    button.textContent = 'Processing image…';
+
+    try {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        try {
+          const base64Data = reader.result.split(',')[1];
+          const res = await fetch('/posts/upload-media', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filename: file.name, base64Data }),
+          });
+          const data = await res.json();
+          if (data.path) {
+            input.value = data.path;
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+        } catch (uploadErr) {
+          console.error('File upload failed:', uploadErr);
+        } finally {
+          button.disabled = false;
+          button.textContent = originalLabel;
+        }
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      button.disabled = false;
+      button.textContent = originalLabel;
+    }
+    fileInput.value = '';
+  };
+
+  fileInput.click();
 });
