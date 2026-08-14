@@ -17,7 +17,12 @@
           <div class="hint">No company pages found. If you administer one, add it in <a href="/settings">Settings</a>.</div>
         <% } %>
 
-        <label for="content">Post text</label>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin:12px 0 4px;">
+          <label for="content" style="margin:0;">Post text</label>
+          <button type="button" class="btn secondary" style="padding:2px 10px; font-size:12px;"
+                  data-ai-rewrite-for="#content"
+                  <%= settings.geminiApiKey ? '' : 'disabled title="Add a Gemini API key in Settings first"' %>>✨ Write with AI</button>
+        </div>
         <textarea name="content" id="content" maxlength="3000" placeholder="What do you want to share?"></textarea>
 
         <label for="mediaPath">Image file path (optional)</label>
@@ -47,6 +52,23 @@
     <div class="card">
       <h2>Preview</h2>
       <div id="preview"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Shared "AI Write/Rewrite" modal, targeted per-click via data-ai-rewrite-for. Same
+     endpoint/modal as Queue and Calendar — starts empty here, so it writes fresh text
+     rather than rewriting (see dashboard.js). -->
+<div id="ai-rewrite-modal" class="modal-overlay" style="display:none;">
+  <div class="modal-card">
+    <span class="modal-close">&times;</span>
+    <h3 id="ai-rewrite-heading" style="margin-top:0;">✨ Write with AI</h3>
+    <p class="hint" id="ai-rewrite-hint">Describe what the post should be about — e.g. "announce our new product launch", "share a lesson from this week".</p>
+    <textarea id="ai-rewrite-instruction" placeholder="What should the post say?" style="min-height:70px;"></textarea>
+    <div id="ai-rewrite-error" style="color:#b31b1b; font-size:12px; margin-top:6px;"></div>
+    <div style="margin-top:14px; display:flex; gap:8px;">
+      <button type="button" class="btn" id="ai-rewrite-submit">Write</button>
+      <button type="button" class="btn secondary" id="ai-rewrite-cancel">Cancel</button>
     </div>
   </div>
 </div>

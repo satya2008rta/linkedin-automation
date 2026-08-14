@@ -56,8 +56,9 @@
   <div class="calendar-day">
     <div class="calendar-day-date"><%= day %></div>
     <% byDate[day].forEach(function(draft) { %>
-      <div class="two-col" style="margin-bottom:18px; padding-bottom:18px; border-bottom:1px solid var(--border);">
+      <div class="two-col" id="draft-<%= draft.id %>" style="margin-bottom:18px; padding-bottom:18px; border-bottom:1px solid var(--border); scroll-margin-top: 20px;">
         <div class="col">
+          <p class="hint" style="margin-top:0;">Last saved <%= friendlyDate(draft.updatedAt) %></p>
           <form method="POST" action="/ai/drafts/<%= draft.id %>/update" class="draft-form" data-id="<%= draft.id %>">
             <div style="display:flex; justify-content:space-between; align-items:center; margin:12px 0 4px;">
               <label style="margin:0;">Content</label>
@@ -95,7 +96,8 @@
     <span class="modal-close" onclick="closeEventModal()">&times;</span>
     <h3 id="modal-title" style="margin-top:0;">Post Details</h3>
     <div id="modal-status-badge" style="margin-bottom:12px;"></div>
-    <div id="modal-date" class="hint" style="margin-bottom:12px;"></div>
+    <div id="modal-date" class="hint" style="margin-bottom:4px;"></div>
+    <div id="modal-last-saved" class="hint" style="margin-bottom:12px;"></div>
 
     <form id="modal-post-form" method="POST" action="">
       <input type="hidden" name="scheduledFor" id="modal-scheduled-input">
@@ -125,8 +127,8 @@
 <div id="ai-rewrite-modal" class="modal-overlay" style="display:none; z-index:10050;">
   <div class="modal-card">
     <span class="modal-close">&times;</span>
-    <h3 style="margin-top:0;">✨ Rewrite with AI</h3>
-    <p class="hint">Describe what you want changed — e.g. "make this more concise", "add a call to action", "make it sound more casual".</p>
+    <h3 id="ai-rewrite-heading" style="margin-top:0;">✨ Rewrite with AI</h3>
+    <p class="hint" id="ai-rewrite-hint">Describe what you want changed — e.g. "make this more concise", "add a call to action", "make it sound more casual".</p>
     <textarea id="ai-rewrite-instruction" placeholder="What should change?" style="min-height:70px;"></textarea>
     <div id="ai-rewrite-error" style="color:#b31b1b; font-size:12px; margin-top:6px;"></div>
     <div style="margin-top:14px; display:flex; gap:8px;">
@@ -356,6 +358,7 @@
     document.getElementById('modal-status-badge').innerHTML = `<span class="status-pill ${post.status}">${post.status.replace('_',' ')}</span>`;
     const dateStr = post.postedAt ? `Posted: ${new Date(post.postedAt).toLocaleString()}` : `Scheduled: ${new Date(post.scheduledFor || post.createdAt).toLocaleString()}`;
     document.getElementById('modal-date').textContent = dateStr;
+    document.getElementById('modal-last-saved').textContent = post.updatedAt ? `Last saved: ${new Date(post.updatedAt).toLocaleString()}` : '';
 
     const form = document.getElementById('modal-post-form');
     form.dataset.id = post.id;

@@ -30,7 +30,8 @@ router.get('/compose', async (req, res, next) => {
   try {
     const token = await storage.getToken();
     const organizations = await storage.listOrganizations();
-    res.render('compose', { title: 'Compose', active: 'compose', token, post: null, organizations });
+    const settings = await storage.getSettings();
+    res.render('compose', { title: 'Compose', active: 'compose', token, post: null, organizations, settings });
   } catch (err) {
     next(err);
   }

@@ -8,11 +8,11 @@
 <% posts.forEach(function(p) {
   const editable = p.status === 'pending' || p.status === 'failed' || p.status === 'blocked_token_expired';
 %>
-  <div class="card">
+  <div class="card" id="post-<%= p.id %>" style="scroll-margin-top: 20px;">
     <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
       <div>
         <span class="status-pill <%= p.status %>"><%= p.status.replace('_',' ') %></span>
-        <span class="hint">&nbsp;<%= p.source %> &middot; scheduled <%= friendlyDate(p.scheduledFor) %></span>
+        <span class="hint">&nbsp;<%= p.source %> &middot; scheduled <%= friendlyDate(p.scheduledFor) %> &middot; last saved <%= friendlyDate(p.updatedAt) %></span>
       </div>
       <% if (!editable) { %>
         <div style="display:flex; gap:8px;">
@@ -98,8 +98,8 @@
 <div id="ai-rewrite-modal" class="modal-overlay" style="display:none;">
   <div class="modal-card">
     <span class="modal-close">&times;</span>
-    <h3 style="margin-top:0;">✨ Rewrite with AI</h3>
-    <p class="hint">Describe what you want changed — e.g. "make this more concise", "add a call to action", "make it sound more casual".</p>
+    <h3 id="ai-rewrite-heading" style="margin-top:0;">✨ Rewrite with AI</h3>
+    <p class="hint" id="ai-rewrite-hint">Describe what you want changed — e.g. "make this more concise", "add a call to action", "make it sound more casual".</p>
     <textarea id="ai-rewrite-instruction" placeholder="What should change?" style="min-height:70px;"></textarea>
     <div id="ai-rewrite-error" style="color:#b31b1b; font-size:12px; margin-top:6px;"></div>
     <div style="margin-top:14px; display:flex; gap:8px;">

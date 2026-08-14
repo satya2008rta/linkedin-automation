@@ -171,12 +171,14 @@ router.post('/:id/update', async (req, res, next) => {
     const fields = editFieldsFromBody(req.body);
     if (!fields) {
       req.flash('error', 'Post content cannot be empty.');
-      return res.redirect('/queue');
+      return res.redirect(`/queue#post-${post.id}`);
     }
 
     await storage.updatePost(post.id, fields);
     req.flash('success', 'Post updated.');
-    res.redirect('/queue');
+    // #post-<id> anchor so the page scrolls back to this card instead of jumping to the
+    // top of the queue — otherwise every save loses your place in a long list.
+    res.redirect(`/queue#post-${post.id}`);
   } catch (err) {
     next(err);
   }
@@ -195,14 +197,14 @@ router.post('/:id/retry', requireValidToken, async (req, res, next) => {
     const fields = editFieldsFromBody(req.body);
     if (!fields) {
       req.flash('error', 'Post content cannot be empty.');
-      return res.redirect('/queue');
+      return res.redirect(`/queue#post-${post.id}`);
     }
     if (!fields.scheduledFor) {
       fields.scheduledFor = post.scheduledFor && new Date(post.scheduledFor) > new Date() ? post.scheduledFor : new Date().toISOString();
     }
     await storage.updatePost(post.id, { ...fields, status: 'pending', attempts: 0, lastError: null, lockedAt: null });
     req.flash('success', 'Post requeued for its scheduled time — the scheduler will pick it up within a minute, or use "Repost Now" for an immediate attempt.');
-    res.redirect('/queue');
+    res.redirect(`/queue#post-${post.id}`);
   } catch (err) {
     next(err);
   }
@@ -224,7 +226,7 @@ async function handlePostNow(req, res, next) {
     const fields = editFieldsFromBody(req.body);
     if (!fields) {
       req.flash('error', 'Post content cannot be empty.');
-      return res.redirect('/queue');
+      return res.redirect(`/queue#post-${post.id}`);
     }
     await storage.updatePost(post.id, {
       ...fields,
@@ -240,7 +242,9 @@ async function handlePostNow(req, res, next) {
     } else {
       req.flash('error', `Post did not go through: ${result.lastError || 'unknown error'}`);
     }
-    res.redirect('/queue');
+    // If it succeeded, the post is no longer in the queue list at all (moved to /posted),
+    // so the anchor just harmlessly doesn't match anything — no special-casing needed.
+    res.redirect(`/queue#post-${post.id}`);
   } catch (err) {
     next(err);
   }

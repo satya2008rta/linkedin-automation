@@ -19,7 +19,18 @@
       "Bash(curl -s -X POST http://localhost:3000/ai/rewrite-text -H 'Content-Type: application/json' -d '{\"content\": \"Excited to share our new product launch! Its going to change everything for our customers.\", \"instruction\": \"make it more concise and add one relevant hashtag\"}')",
       "Bash(curl -s -w \"\\\\nstatus: %{http_code}\\\\n\" -X POST \"http://localhost:3000/ai/rewrite-text\" -H \"Content-Type: application/json\" -d '{\"content\": \"\", \"instruction\": \"make it shorter\"}')",
       "Bash(curl -s -w \"\\\\nstatus: %{http_code}\\\\n\" -X POST \"http://localhost:3000/ai/rewrite-text\" -H \"Content-Type: application/json\" -d '{\"content\": \"some real content here\", \"instruction\": \"\"}')",
-      "Bash(node --check src/public/js/dashboard.js)"
+      "Bash(node --check src/public/js/dashboard.js)",
+      "Bash(curl -s \"http://localhost:3000/compose\")",
+      "Bash(node --check src/services/gemini.service.js)",
+      "Bash(node --check src/routes/posts.routes.js)",
+      "Bash(node --check src/routes/ai.routes.js)",
+      "Bash(node --check src/routes/dashboard.routes.js)",
+      "Bash(curl -s -X POST http://localhost:3000/ai/rewrite-text -H 'Content-Type: application/json' -d '{\"content\": \"\", \"instruction\": \"announce that we just crossed 10000 users, keep it upbeat and grateful\"}')",
+      "Bash(curl -s -X POST http://localhost:3000/ai/rewrite-text -H 'Content-Type: application/json' -d '{\"content\": \"We launched a new feature today.\", \"instruction\": \"make it more exciting\"}')",
+      "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\);process.stdin.on\\('end',\\(\\)=>console.log\\(JSON.parse\\(d\\)\\)\\)\")",
+      "Bash(curl -s -w \"\\\\nstatus: %{http_code}\\\\n\" -X POST \"http://localhost:3000/ai/rewrite-text\" -H \"Content-Type: application/json\" -d '{\"content\": \"\", \"instruction\": \"\"}')",
+      "Bash(curl -s -i -X POST http://localhost:3000/posts/47/update --data-urlencode 'content=anchor test post EDITED' --data-urlencode scheduledFor=2026-09-01T09:00)",
+      "Bash(curl -s -i -X POST \"http://localhost:3000/ai/drafts/48/update\" --data-urlencode \"content=anchor test draft EDITED\")"
     ]
   }
 }

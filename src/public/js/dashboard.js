@@ -124,16 +124,20 @@ document.addEventListener('click', (e) => {
   fileInput.click();
 });
 
-// "Rewrite with AI" ✨ buttons: <button type="button" data-ai-rewrite-for="#someTextarea">.
-// Opens a shared modal (#ai-rewrite-modal, present once per page on queue.ejs/calendar.ejs)
-// for a free-text instruction, sends the CURRENT textarea value + instruction to Gemini via
-// POST /ai/rewrite-text, and drops the rewritten text back in. Stateless on the server side
-// (no post ID, no DB write) — the existing Save/Approve/Retry button still has to be clicked
-// to actually persist it, same as any other manual edit.
+// "Rewrite with AI" / "Write with AI" ✨ buttons: <button type="button" data-ai-rewrite-for="#someTextarea">.
+// Opens a shared modal (#ai-rewrite-modal, present once per page on compose.ejs/queue.ejs/
+// calendar.ejs) for a free-text instruction, sends the CURRENT textarea value + instruction
+// to Gemini via POST /ai/rewrite-text, and drops the result back in. Works both ways: an
+// empty textarea gets fresh AI-written text, a non-empty one gets rewritten per the
+// instruction — same endpoint, same modal, the server decides which based on whether there's
+// existing content. Stateless on the server side (no post ID, no DB write) — the existing
+// Save/Approve/Post Now button still has to be clicked to actually persist/publish it.
 (function () {
   const modal = document.getElementById('ai-rewrite-modal');
-  if (!modal) return; // this page doesn't have the modal (e.g. compose/settings)
+  if (!modal) return; // this page doesn't have the modal (e.g. settings)
 
+  const headingEl = document.getElementById('ai-rewrite-heading');
+  const hintEl = document.getElementById('ai-rewrite-hint');
   const instructionEl = document.getElementById('ai-rewrite-instruction');
   const errorEl = document.getElementById('ai-rewrite-error');
   const rewriteBtn = document.getElementById('ai-rewrite-submit');
@@ -149,10 +153,17 @@ document.addEventListener('click', (e) => {
   function openModal(textarea) {
     targetTextarea = textarea;
     requestToken++;
+    const isBlank = !textarea.value.trim();
+    if (headingEl) headingEl.textContent = isBlank ? '✨ Write with AI' : '✨ Rewrite with AI';
+    if (hintEl) {
+      hintEl.textContent = isBlank
+        ? 'Describe what the post should be about — e.g. "announce our new product launch", "share a lesson from this week".'
+        : 'Describe what you want changed — e.g. "make this more concise", "add a call to action", "make it sound more casual".';
+    }
     instructionEl.value = '';
     errorEl.textContent = '';
     rewriteBtn.disabled = false;
-    rewriteBtn.textContent = 'Rewrite';
+    rewriteBtn.textContent = isBlank ? 'Write' : 'Rewrite';
     modal.style.display = 'flex';
     instructionEl.focus();
   }
@@ -170,10 +181,6 @@ document.addEventListener('click', (e) => {
     const textarea = document.querySelector(trigger.getAttribute('data-ai-rewrite-for'));
     if (!textarea) return;
     openModal(textarea);
-    if (!textarea.value.trim()) {
-      // Show the error in context rather than silently no-op'ing — cheaper than a round trip.
-      errorEl.textContent = 'Nothing to rewrite yet — write something first.';
-    }
   });
 
   cancelBtn.addEventListener('click', closeModal);
@@ -183,16 +190,13 @@ document.addEventListener('click', (e) => {
     if (!targetTextarea) return;
     const instruction = instructionEl.value.trim();
     if (!instruction) {
-      errorEl.textContent = 'Describe what you want changed.';
+      errorEl.textContent = 'Describe what the post should say.';
       return;
     }
-    if (!targetTextarea.value.trim()) {
-      errorEl.textContent = 'Nothing to rewrite yet — write something first.';
-      return;
-    }
+    const wasBlank = !targetTextarea.value.trim();
     errorEl.textContent = '';
     rewriteBtn.disabled = true;
-    rewriteBtn.textContent = 'Rewriting…';
+    rewriteBtn.textContent = wasBlank ? 'Writing…' : 'Rewriting…';
 
     const myToken = requestToken;
     const textareaAtRequestTime = targetTextarea;
@@ -217,7 +221,7 @@ document.addEventListener('click', (e) => {
     } finally {
       if (myToken === requestToken) {
         rewriteBtn.disabled = false;
-        rewriteBtn.textContent = 'Rewrite';
+        rewriteBtn.textContent = wasBlank ? 'Write' : 'Rewrite';
       }
     }
   });

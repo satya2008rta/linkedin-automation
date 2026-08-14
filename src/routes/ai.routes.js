@@ -102,12 +102,15 @@ router.post('/rewrite-text', async (req, res) => {
 
 router.post('/drafts/:id/update', async (req, res, next) => {
   try {
+    const id = Number(req.params.id);
     const fields = editFieldsFromBody(req.body);
     if (Object.keys(fields).length > 0) {
-      await storage.updatePost(Number(req.params.id), fields);
+      await storage.updatePost(id, fields);
     }
     req.flash('success', 'Draft updated.');
-    res.redirect('/calendar');
+    // #draft-<id> anchor so the page scrolls back to this card instead of jumping to the
+    // top of the calendar — otherwise every save loses your place in a long draft list.
+    res.redirect(`/calendar#draft-${id}`);
   } catch (err) {
     next(err);
   }
@@ -133,7 +136,7 @@ router.post('/drafts/:id/approve', requireValidToken, async (req, res, next) => 
       status: 'pending',
     });
     req.flash('success', 'Approved — it will publish at its scheduled time.');
-    res.redirect('/calendar');
+    res.redirect(`/calendar#draft-${post.id}`);
   } catch (err) {
     next(err);
   }
@@ -141,9 +144,10 @@ router.post('/drafts/:id/approve', requireValidToken, async (req, res, next) => 
 
 router.post('/drafts/:id/discard', async (req, res, next) => {
   try {
-    await storage.deletePost(Number(req.params.id));
+    const id = Number(req.params.id);
+    await storage.deletePost(id);
     req.flash('success', 'Draft discarded.');
-    res.redirect('/calendar');
+    res.redirect(`/calendar#draft-${id}`);
   } catch (err) {
     next(err);
   }
