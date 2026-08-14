@@ -42,8 +42,13 @@
               <% }); %>
             </select>
 
-            <label>Content</label>
-            <textarea name="content" class="queue-content"><%= p.content %></textarea>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin:12px 0 4px;">
+              <label style="margin:0;">Content</label>
+              <button type="button" class="btn secondary" style="padding:2px 10px; font-size:12px;"
+                      data-ai-rewrite-for="#queue-content-<%= p.id %>"
+                      <%= settings.geminiApiKey ? '' : 'disabled title="Add a Gemini API key in Settings first"' %>>✨ Rewrite with AI</button>
+            </div>
+            <textarea name="content" id="queue-content-<%= p.id %>" class="queue-content"><%= p.content %></textarea>
 
             <label>Image file path (optional)</label>
             <div style="display:flex; gap:8px;">
@@ -88,6 +93,21 @@
     </div>
   </div>
 <% }); %>
+
+<!-- Shared "AI Rewrite" modal, targeted per-click via data-ai-rewrite-for on each ✨ button. -->
+<div id="ai-rewrite-modal" class="modal-overlay" style="display:none;">
+  <div class="modal-card">
+    <span class="modal-close">&times;</span>
+    <h3 style="margin-top:0;">✨ Rewrite with AI</h3>
+    <p class="hint">Describe what you want changed — e.g. "make this more concise", "add a call to action", "make it sound more casual".</p>
+    <textarea id="ai-rewrite-instruction" placeholder="What should change?" style="min-height:70px;"></textarea>
+    <div id="ai-rewrite-error" style="color:#b31b1b; font-size:12px; margin-top:6px;"></div>
+    <div style="margin-top:14px; display:flex; gap:8px;">
+      <button type="button" class="btn" id="ai-rewrite-submit">Rewrite</button>
+      <button type="button" class="btn secondary" id="ai-rewrite-cancel">Cancel</button>
+    </div>
+  </div>
+</div>
 
 <script src="/js/preview.js"></script>
 <script src="/js/dashboard.js"></script>

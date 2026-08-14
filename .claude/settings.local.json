@@ -12,7 +12,14 @@
       "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" \"http://localhost:3000/posts/media-preview?path=$\\(pwd\\)/package.json\")",
       "Bash(curl -s -i -X POST \"http://localhost:3000/ai/generate-plan\")",
       "Bash(curl -s -c /tmp/c.txt -b /tmp/c.txt \"http://localhost:3000/ai/generate-plan\" -X POST)",
-      "Bash(curl -s -b /tmp/c.txt \"http://localhost:3000/calendar\")"
+      "Bash(curl -s -b /tmp/c.txt \"http://localhost:3000/calendar\")",
+      "PowerShell(Start-Process -FilePath \"D:\\\\Apps\\\\satya2008rta\\\\Linkedin Automation\\\\Start LinkedIn Automation.bat\" -WorkingDirectory \"D:\\\\Apps\\\\satya2008rta\\\\Linkedin Automation\" -WindowStyle Hidden)",
+      "Bash(curl -s -o /tmp/h.txt -w \"health: %{http_code}\\\\n\" http://localhost:3000/health)",
+      "Bash(curl -s \"http://localhost:3000/calendar\")",
+      "Bash(curl -s -X POST http://localhost:3000/ai/rewrite-text -H 'Content-Type: application/json' -d '{\"content\": \"Excited to share our new product launch! Its going to change everything for our customers.\", \"instruction\": \"make it more concise and add one relevant hashtag\"}')",
+      "Bash(curl -s -w \"\\\\nstatus: %{http_code}\\\\n\" -X POST \"http://localhost:3000/ai/rewrite-text\" -H \"Content-Type: application/json\" -d '{\"content\": \"\", \"instruction\": \"make it shorter\"}')",
+      "Bash(curl -s -w \"\\\\nstatus: %{http_code}\\\\n\" -X POST \"http://localhost:3000/ai/rewrite-text\" -H \"Content-Type: application/json\" -d '{\"content\": \"some real content here\", \"instruction\": \"\"}')",
+      "Bash(node --check src/public/js/dashboard.js)"
     ]
   }
 }

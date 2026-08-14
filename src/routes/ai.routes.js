@@ -83,6 +83,23 @@ router.post('/generate-plan', async (req, res) => {
   res.redirect('/calendar');
 });
 
+// Stateless "rewrite with AI" for the ✨ button on Queue/Calendar: takes whatever text is
+// currently in the browser (may not match the saved post — could be an unsaved edit) plus
+// a free-text instruction, returns rewritten text. No post ID, no DB write — the caller
+// still has to click the existing Save/Approve button to persist it.
+router.post('/rewrite-text', async (req, res) => {
+  try {
+    const { content, instruction } = req.body || {};
+    const settings = await storage.getSettings();
+    const apiKey = gemini.resolveApiKey(settings);
+    const rewritten = await gemini.rewriteText(apiKey, { content, instruction });
+    res.json({ content: rewritten });
+  } catch (err) {
+    logger.error('AI rewrite failed:', err.message);
+    res.status(400).json({ error: err.message });
+  }
+});
+
 router.post('/drafts/:id/update', async (req, res, next) => {
   try {
     const fields = editFieldsFromBody(req.body);

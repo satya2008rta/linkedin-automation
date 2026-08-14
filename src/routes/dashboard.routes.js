@@ -42,7 +42,8 @@ router.get('/queue', async (req, res, next) => {
     const queued = posts.filter((p) => p.status !== 'draft' && p.status !== 'posted');
     const token = await storage.getToken();
     const organizations = await storage.listOrganizations();
-    res.render('queue', { title: 'Queue', active: 'queue', posts: queued, token, organizations });
+    const settings = await storage.getSettings();
+    res.render('queue', { title: 'Queue', active: 'queue', posts: queued, token, organizations, settings });
   } catch (err) {
     next(err);
   }

@@ -59,8 +59,13 @@
       <div class="two-col" style="margin-bottom:18px; padding-bottom:18px; border-bottom:1px solid var(--border);">
         <div class="col">
           <form method="POST" action="/ai/drafts/<%= draft.id %>/update" class="draft-form" data-id="<%= draft.id %>">
-            <label>Content</label>
-            <textarea name="content" class="draft-content"><%= draft.content %></textarea>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin:12px 0 4px;">
+              <label style="margin:0;">Content</label>
+              <button type="button" class="btn secondary" style="padding:2px 10px; font-size:12px;"
+                      data-ai-rewrite-for="#draft-content-<%= draft.id %>"
+                      <%= settings.geminiApiKey ? '' : 'disabled title="Add a Gemini API key in Settings first"' %>>✨ Rewrite with AI</button>
+            </div>
+            <textarea name="content" id="draft-content-<%= draft.id %>" class="draft-content"><%= draft.content %></textarea>
             <label>Image file path (optional)</label>
             <div style="display:flex; gap:8px;">
               <input type="text" name="mediaPath" id="draft-media-<%= draft.id %>" class="draft-media" value="<%= draft.mediaPath || '' %>" placeholder="C:\Users\you\Desktop\photo.jpg" style="flex:1;">
@@ -95,7 +100,12 @@
     <form id="modal-post-form" method="POST" action="">
       <input type="hidden" name="scheduledFor" id="modal-scheduled-input">
       
-      <label style="display:block; font-size:12px; font-weight:600; margin-bottom:4px;">Post Content</label>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+        <label style="display:block; font-size:12px; font-weight:600; margin:0;">Post Content</label>
+        <button type="button" class="btn secondary" id="modal-ai-rewrite-btn" style="padding:2px 10px; font-size:12px;"
+                data-ai-rewrite-for="#modal-content-input"
+                <%= settings.geminiApiKey ? '' : 'disabled title="Add a Gemini API key in Settings first"' %>>✨ Rewrite with AI</button>
+      </div>
       <textarea id="modal-content-input" name="content" style="width:100%; min-height:90px; font-size:14px; margin-bottom:12px; padding:8px; border:1px solid #c7c7c7; border-radius:4px; font-family:inherit;"></textarea>
 
       <label style="display:block; font-size:12px; font-weight:600; margin-bottom:4px;">Image file path (optional)</label>
@@ -106,6 +116,23 @@
 
       <div id="modal-actions" style="display:flex; gap:8px; flex-wrap:wrap; margin-top:16px;"></div>
     </form>
+  </div>
+</div>
+
+<!-- Shared "AI Rewrite" modal, targeted per-click via data-ai-rewrite-for on each ✨ button.
+     Higher z-index than both .modal-overlay (9999) and .toast-notification (10000) since it
+     can be opened from inside the already-open Event Detail Modal above. -->
+<div id="ai-rewrite-modal" class="modal-overlay" style="display:none; z-index:10050;">
+  <div class="modal-card">
+    <span class="modal-close">&times;</span>
+    <h3 style="margin-top:0;">✨ Rewrite with AI</h3>
+    <p class="hint">Describe what you want changed — e.g. "make this more concise", "add a call to action", "make it sound more casual".</p>
+    <textarea id="ai-rewrite-instruction" placeholder="What should change?" style="min-height:70px;"></textarea>
+    <div id="ai-rewrite-error" style="color:#b31b1b; font-size:12px; margin-top:6px;"></div>
+    <div style="margin-top:14px; display:flex; gap:8px;">
+      <button type="button" class="btn" id="ai-rewrite-submit">Rewrite</button>
+      <button type="button" class="btn secondary" id="ai-rewrite-cancel">Cancel</button>
+    </div>
   </div>
 </div>
 
@@ -339,6 +366,11 @@
     contentInput.value = post.content || '';
     mediaInput.value = post.mediaPath || '';
     scheduledInput.value = post.scheduledFor || post.createdAt || '';
+
+    // A posted post has no Save action in this modal (view-only), so rewriting its text
+    // here would be a dead end — hide the trigger rather than let it edit toward nowhere.
+    const aiRewriteBtn = document.getElementById('modal-ai-rewrite-btn');
+    if (aiRewriteBtn) aiRewriteBtn.style.display = post.status === 'posted' ? 'none' : '';
 
     let actionsHtml = '';
     if (post.status === 'draft') {

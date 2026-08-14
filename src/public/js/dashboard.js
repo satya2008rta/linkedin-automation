@@ -123,3 +123,102 @@ document.addEventListener('click', (e) => {
 
   fileInput.click();
 });
+
+// "Rewrite with AI" ✨ buttons: <button type="button" data-ai-rewrite-for="#someTextarea">.
+// Opens a shared modal (#ai-rewrite-modal, present once per page on queue.ejs/calendar.ejs)
+// for a free-text instruction, sends the CURRENT textarea value + instruction to Gemini via
+// POST /ai/rewrite-text, and drops the rewritten text back in. Stateless on the server side
+// (no post ID, no DB write) — the existing Save/Approve/Retry button still has to be clicked
+// to actually persist it, same as any other manual edit.
+(function () {
+  const modal = document.getElementById('ai-rewrite-modal');
+  if (!modal) return; // this page doesn't have the modal (e.g. compose/settings)
+
+  const instructionEl = document.getElementById('ai-rewrite-instruction');
+  const errorEl = document.getElementById('ai-rewrite-error');
+  const rewriteBtn = document.getElementById('ai-rewrite-submit');
+  const cancelBtn = document.getElementById('ai-rewrite-cancel');
+  const closeX = modal.querySelector('.modal-close'); // scoped to this modal, avoids id clashes with other modals on the page
+
+  let targetTextarea = null;
+  // Bumped on every open/close so a slow response can't land on whatever post the user has
+  // since navigated to — the Event Detail Modal's textarea is a single shared DOM node
+  // reused across every post clicked, so this isn't just theoretical.
+  let requestToken = 0;
+
+  function openModal(textarea) {
+    targetTextarea = textarea;
+    requestToken++;
+    instructionEl.value = '';
+    errorEl.textContent = '';
+    rewriteBtn.disabled = false;
+    rewriteBtn.textContent = 'Rewrite';
+    modal.style.display = 'flex';
+    instructionEl.focus();
+  }
+
+  function closeModal() {
+    requestToken++; // invalidate any in-flight request for the textarea we're leaving
+    modal.style.display = 'none';
+    targetTextarea = null;
+  }
+
+  document.addEventListener('click', (e) => {
+    const trigger = e.target.closest('[data-ai-rewrite-for]');
+    if (!trigger) return;
+    e.preventDefault();
+    const textarea = document.querySelector(trigger.getAttribute('data-ai-rewrite-for'));
+    if (!textarea) return;
+    openModal(textarea);
+    if (!textarea.value.trim()) {
+      // Show the error in context rather than silently no-op'ing — cheaper than a round trip.
+      errorEl.textContent = 'Nothing to rewrite yet — write something first.';
+    }
+  });
+
+  cancelBtn.addEventListener('click', closeModal);
+  if (closeX) closeX.addEventListener('click', closeModal);
+
+  rewriteBtn.addEventListener('click', async () => {
+    if (!targetTextarea) return;
+    const instruction = instructionEl.value.trim();
+    if (!instruction) {
+      errorEl.textContent = 'Describe what you want changed.';
+      return;
+    }
+    if (!targetTextarea.value.trim()) {
+      errorEl.textContent = 'Nothing to rewrite yet — write something first.';
+      return;
+    }
+    errorEl.textContent = '';
+    rewriteBtn.disabled = true;
+    rewriteBtn.textContent = 'Rewriting…';
+
+    const myToken = requestToken;
+    const textareaAtRequestTime = targetTextarea;
+
+    try {
+      const res = await fetch('/ai/rewrite-text', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: textareaAtRequestTime.value, instruction }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `Rewrite failed with status ${res.status}`);
+
+      if (myToken !== requestToken) return; // modal was closed/retargeted while this was in flight
+
+      textareaAtRequestTime.value = data.content;
+      textareaAtRequestTime.dispatchEvent(new Event('input', { bubbles: true }));
+      closeModal();
+    } catch (err) {
+      if (myToken !== requestToken) return;
+      errorEl.textContent = err.message;
+    } finally {
+      if (myToken === requestToken) {
+        rewriteBtn.disabled = false;
+        rewriteBtn.textContent = 'Rewrite';
+      }
+    }
+  });
+})();

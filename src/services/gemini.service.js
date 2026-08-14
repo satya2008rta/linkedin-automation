@@ -107,4 +107,67 @@ async function generateMonthlyContentPlan(settings, { apiKey, displayName, fromD
   return validateAndNormalize(parsed);
 }
 
-module.exports = { generateMonthlyContentPlan, GeminiPlanError, resolveApiKey: (settings) => settings.geminiApiKey || env.geminiApiKeyFallback || null };
+// Rewrites a single post's text per a free-text instruction (the ✨ "rewrite with AI"
+// feature on Queue/Calendar). Stateless — takes/returns plain text, no post ID, no DB
+// access — so it works identically for a saved post, an unsaved edit-in-progress, or a
+// not-yet-approved draft.
+function validateRewriteResponse(parsed) {
+  if (!parsed || typeof parsed.content !== 'string' || !parsed.content.trim()) {
+    throw new GeminiPlanError('Gemini did not return usable text. Try again or reword your instruction.');
+  }
+  return parsed.content.trim().slice(0, MAX_POST_CHARS);
+}
+
+async function rewriteText(apiKey, { content, instruction }) {
+  if (!apiKey) {
+    throw new GeminiPlanError('No Gemini API key configured. Add one in Settings first.');
+  }
+  if (!content || !content.trim()) {
+    throw new GeminiPlanError('Nothing to rewrite yet — write something first.');
+  }
+  if (!instruction || !instruction.trim()) {
+    throw new GeminiPlanError('Describe what you want changed.');
+  }
+
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({
+    model: MODEL_NAME,
+    generationConfig: { responseMimeType: 'application/json' },
+  });
+
+  const prompt = `You are editing an existing LinkedIn post based on the author's instruction.
+
+Original post:
+"""
+${content}
+"""
+
+Instruction: ${instruction}
+
+Rewrite the post accordingly. Keep it ready-to-publish LinkedIn post text (no markdown, no surrounding quotes), under ${MAX_POST_CHARS} characters. Preserve the original intent/topic unless the instruction explicitly says otherwise.
+Return ONLY JSON matching this shape: { "content": string }`;
+
+  let text;
+  try {
+    const result = await model.generateContent(prompt);
+    text = result.response.text();
+  } catch (err) {
+    throw new GeminiPlanError(`Gemini request failed: ${err.message}`);
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new GeminiPlanError('Gemini returned a response that was not valid JSON. Try again.');
+  }
+
+  return validateRewriteResponse(parsed);
+}
+
+module.exports = {
+  generateMonthlyContentPlan,
+  rewriteText,
+  GeminiPlanError,
+  resolveApiKey: (settings) => settings.geminiApiKey || env.geminiApiKeyFallback || null,
+};
