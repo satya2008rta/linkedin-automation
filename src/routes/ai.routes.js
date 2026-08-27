@@ -30,12 +30,13 @@ function editFieldsFromBody(body) {
 
 router.post('/settings', async (req, res, next) => {
   try {
+    const userId = req.activeUserId;
     const { geminiApiKey, aiTopics, aiTone, aiAudience, aiPostsPerWeek, aiPreferredTimes, aiExtraInstructions } = req.body;
     const update = { aiTopics, aiTone, aiAudience, aiPostsPerWeek: Number(aiPostsPerWeek) || 3, aiPreferredTimes, aiExtraInstructions };
     // Only overwrite the stored key if the user actually typed a new one — the settings
     // form never re-displays the saved key, so a blank submit shouldn't wipe it out.
     if (geminiApiKey && geminiApiKey.trim()) update.geminiApiKey = geminiApiKey.trim();
-    await storage.saveSettings(update);
+    await storage.saveSettings(userId, update);
     req.flash('success', 'AI settings saved.');
     res.redirect('/settings');
   } catch (err) {
@@ -45,10 +46,11 @@ router.post('/settings', async (req, res, next) => {
 
 router.post('/generate-plan', async (req, res) => {
   try {
+    const userId = req.activeUserId;
     const { fromDate, toDate } = req.body;
-    const settings = await storage.getSettings();
+    const settings = await storage.getSettings(userId);
     const apiKey = gemini.resolveApiKey(settings);
-    const token = await storage.getToken();
+    const token = await storage.getToken(userId);
     const drafts = await gemini.generateMonthlyContentPlan(settings, {
       apiKey,
       displayName: token?.displayName,
@@ -56,7 +58,7 @@ router.post('/generate-plan', async (req, res) => {
       toDate: toDate && toDate.trim() ? toDate.trim() : null,
     });
 
-    const allExisting = await storage.listPosts({});
+    const allExisting = await storage.listPosts(userId, {});
 
     for (const draft of drafts) {
       const draftDateStr = draft.scheduledFor ? draft.scheduledFor.slice(0, 10) : '';
@@ -67,7 +69,7 @@ router.post('/generate-plan', async (req, res) => {
 
       const autoScheduledFor = autoSpaceTargetTime(draft.scheduledFor, existingOnDay);
 
-      const created = await storage.createPost({
+      const created = await storage.createPost(userId, {
         content: draft.content,
         scheduledFor: autoScheduledFor,
         status: 'draft',
@@ -90,7 +92,7 @@ router.post('/generate-plan', async (req, res) => {
 router.post('/rewrite-text', async (req, res) => {
   try {
     const { content, instruction } = req.body || {};
-    const settings = await storage.getSettings();
+    const settings = await storage.getSettings(req.activeUserId);
     const apiKey = gemini.resolveApiKey(settings);
     const rewritten = await gemini.rewriteText(apiKey, { content, instruction });
     res.json({ content: rewritten });
@@ -102,10 +104,11 @@ router.post('/rewrite-text', async (req, res) => {
 
 router.post('/drafts/:id/update', async (req, res, next) => {
   try {
+    const userId = req.activeUserId;
     const id = Number(req.params.id);
     const fields = editFieldsFromBody(req.body);
     if (Object.keys(fields).length > 0) {
-      await storage.updatePost(id, fields);
+      await storage.updatePost(id, userId, fields);
     }
     req.flash('success', 'Draft updated.');
     // #draft-<id> anchor so the page scrolls back to this card instead of jumping to the
@@ -118,7 +121,8 @@ router.post('/drafts/:id/update', async (req, res, next) => {
 
 router.post('/drafts/:id/approve', requireValidToken, async (req, res, next) => {
   try {
-    const post = await storage.getPost(Number(req.params.id));
+    const userId = req.activeUserId;
+    const post = await storage.getPost(Number(req.params.id), userId);
     if (!post || post.status !== 'draft') {
       req.flash('error', 'Draft not found.');
       return res.redirect('/calendar');
@@ -130,7 +134,7 @@ router.post('/drafts/:id/approve', requireValidToken, async (req, res, next) => 
       return res.redirect('/calendar');
     }
 
-    await storage.updatePost(post.id, {
+    await storage.updatePost(post.id, userId, {
       ...fields,
       content: finalContent,
       status: 'pending',
@@ -144,8 +148,9 @@ router.post('/drafts/:id/approve', requireValidToken, async (req, res, next) => 
 
 router.post('/drafts/:id/discard', async (req, res, next) => {
   try {
+    const userId = req.activeUserId;
     const id = Number(req.params.id);
-    await storage.deletePost(id);
+    await storage.deletePost(id, userId);
     req.flash('success', 'Draft discarded.');
     res.redirect(`/calendar#draft-${id}`);
   } catch (err) {

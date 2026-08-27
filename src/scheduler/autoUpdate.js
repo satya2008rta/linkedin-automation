@@ -52,8 +52,8 @@ async function checkForUpdates() {
     // Don't restart mid-publish — that's exactly the scenario that left a post in an
     // ambiguous state once already (see reapStaleLocks in storage.service.js). Defer to
     // the next check instead of forcing it.
-    const inFlight = await storage.listPosts({ status: 'posting' });
-    if (inFlight.length > 0) {
+    const inFlight = await storage.anyPostsWithStatus('posting');
+    if (inFlight) {
       logger.warn('Auto-update: a post is currently being published — deferring restart to the next check.');
       return;
     }

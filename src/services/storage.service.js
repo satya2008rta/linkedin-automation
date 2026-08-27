@@ -1,8 +1,14 @@
-// Storage access layer. Every function here is `async` even though better-sqlite3 is
+// Storage access layer. Every function here is `async` even though node:sqlite is
 // synchronous under the hood — that's deliberate: it means routes/scheduler code already
 // speaks the calling convention a future `firebase-admin`/Firestore-backed implementation
 // would need, so migrating storage backends later means swapping this file's internals,
 // not every caller.
+//
+// Almost every function below takes a `userId` as its first argument and scopes its query
+// to it — this is the multi-user ownership boundary. `getPost`/`getEngagement` filter
+// `WHERE id=? AND userId=?` directly in SQL specifically so a post/engagement belonging to
+// someone else simply doesn't exist as far as a caller is concerned, rather than relying on
+// every route remembering to check ownership itself after a fetch.
 const db = require('../config/db');
 
 const nowIso = () => new Date().toISOString();
@@ -16,15 +22,94 @@ function pick(obj, keys) {
   return out;
 }
 
-// ---- tokens (singleton row, id = 1) ----
+// ---- users ----
 
-async function getToken() {
-  return db.prepare('SELECT * FROM tokens WHERE id = 1').get() || null;
+async function getUserById(id) {
+  if (!id) return null;
+  return db.prepare('SELECT * FROM users WHERE id = ?').get(id) || null;
 }
 
-async function saveToken(token) {
-  const existing = await getToken();
+async function getUserByPersonUrn(personUrn) {
+  if (!personUrn) return null;
+  return db.prepare('SELECT * FROM users WHERE personUrn = ?').get(personUrn) || null;
+}
+
+async function listAllUsers() {
+  return db.prepare('SELECT * FROM users ORDER BY displayName ASC').all();
+}
+
+// Claims any posts/engagements/settings left ownerless (userId IS NULL) by the one-time
+// singleton->per-user schema migration in config/db.js — real data from before multi-user
+// support existed, with no LinkedIn token connected at migration time to attribute it to.
+// Only meaningfully does anything the first time it's called (for the very first account
+// this app ever has) — see upsertUserFromProfile, the only caller.
+async function adoptOrphanedData(userId) {
+  db.prepare('UPDATE posts SET userId = ? WHERE userId IS NULL').run(userId);
+  db.prepare('UPDATE engagements SET userId = ? WHERE userId IS NULL').run(userId);
+  const orphanedSettings = db.prepare('SELECT * FROM settings WHERE userId IS NULL LIMIT 1').get();
+  if (orphanedSettings) {
+    const alreadyHasOwn = db.prepare('SELECT id FROM settings WHERE userId = ?').get(userId);
+    if (!alreadyHasOwn) {
+      db.prepare('UPDATE settings SET userId = ? WHERE id = ?').run(userId, orphanedSettings.id);
+    }
+  }
+}
+
+// Resolves the app account for a LinkedIn profile — this is the one place "connect
+// LinkedIn" becomes "log into the app" (see auth.routes.js's OAuth callback). Creates a
+// user on first sign-in (adopting any pre-existing ownerless data if this is literally the
+// first account ever), otherwise just refreshes profile fields + lastLoginAt.
+async function upsertUserFromProfile({ personUrn, displayName, email, pictureUrl, headline }) {
+  const ts = nowIso();
+  const existing = await getUserByPersonUrn(personUrn);
+  if (existing) {
+    db.prepare(
+      `UPDATE users SET displayName=@displayName, email=@email, pictureUrl=@pictureUrl,
+         headline=@headline, lastLoginAt=@lastLoginAt WHERE id=@id`
+    ).run({
+      id: existing.id,
+      displayName: displayName ?? null,
+      email: email ?? null,
+      pictureUrl: pictureUrl ?? null,
+      headline: headline ?? null,
+      lastLoginAt: ts,
+    });
+    return { isNewUser: false, user: await getUserById(existing.id) };
+  }
+
+  const { c: usersBefore } = db.prepare('SELECT COUNT(*) as c FROM users').get();
+  const info = db
+    .prepare(
+      `INSERT INTO users (personUrn, displayName, email, pictureUrl, headline, createdAt, lastLoginAt)
+       VALUES (@personUrn, @displayName, @email, @pictureUrl, @headline, @createdAt, @lastLoginAt)`
+    )
+    .run({
+      personUrn,
+      displayName: displayName ?? null,
+      email: email ?? null,
+      pictureUrl: pictureUrl ?? null,
+      headline: headline ?? null,
+      createdAt: ts,
+      lastLoginAt: ts,
+    });
+  const user = await getUserById(info.lastInsertRowid);
+  if (usersBefore === 0) {
+    await adoptOrphanedData(user.id);
+  }
+  return { isNewUser: true, user };
+}
+
+// ---- tokens (one row per user, keyed by userId) ----
+
+async function getToken(userId) {
+  if (!userId) return null;
+  return db.prepare('SELECT * FROM tokens WHERE userId = ?').get(userId) || null;
+}
+
+async function saveToken(userId, token) {
+  const existing = await getToken(userId);
   const merged = {
+    userId,
     accessToken: token.accessToken ?? existing?.accessToken ?? null,
     tokenType: token.tokenType ?? existing?.tokenType ?? null,
     scope: token.scope ?? existing?.scope ?? null,
@@ -38,23 +123,23 @@ async function saveToken(token) {
     lastAuthAt: token.lastAuthAt ?? nowIso(),
   };
   db.prepare(
-    `INSERT INTO tokens (id, accessToken, tokenType, scope, personUrn, displayName, email, pictureUrl, headline, obtainedAt, expiresAt, lastAuthAt)
-     VALUES (1, @accessToken, @tokenType, @scope, @personUrn, @displayName, @email, @pictureUrl, @headline, @obtainedAt, @expiresAt, @lastAuthAt)
-     ON CONFLICT(id) DO UPDATE SET
+    `INSERT INTO tokens (userId, accessToken, tokenType, scope, personUrn, displayName, email, pictureUrl, headline, obtainedAt, expiresAt, lastAuthAt)
+     VALUES (@userId, @accessToken, @tokenType, @scope, @personUrn, @displayName, @email, @pictureUrl, @headline, @obtainedAt, @expiresAt, @lastAuthAt)
+     ON CONFLICT(userId) DO UPDATE SET
        accessToken=excluded.accessToken, tokenType=excluded.tokenType, scope=excluded.scope,
        personUrn=excluded.personUrn, displayName=excluded.displayName, email=excluded.email,
        pictureUrl=excluded.pictureUrl, headline=excluded.headline, obtainedAt=excluded.obtainedAt,
        expiresAt=excluded.expiresAt, lastAuthAt=excluded.lastAuthAt`
   ).run(merged);
-  return getToken();
+  return getToken(userId);
 }
 
-async function clearToken() {
-  db.prepare('DELETE FROM tokens WHERE id = 1').run();
+async function clearToken(userId) {
+  db.prepare('DELETE FROM tokens WHERE userId = ?').run(userId);
 }
 
-async function tokenStatus() {
-  const token = await getToken();
+async function tokenStatus(userId) {
+  const token = await getToken(userId);
   if (!token || !token.accessToken) return { connected: false, expired: true, daysRemaining: 0, token: null };
   const expiresAt = token.expiresAt ? new Date(token.expiresAt) : null;
   const msRemaining = expiresAt ? expiresAt.getTime() - Date.now() : -1;
@@ -62,12 +147,12 @@ async function tokenStatus() {
   return { connected: true, expired: msRemaining <= 0, daysRemaining, token };
 }
 
-// ---- settings (singleton row, id = 1) ----
+// ---- settings (one row per user, keyed by userId) ----
 
-async function getSettings() {
+async function getSettings(userId) {
   return (
-    db.prepare('SELECT * FROM settings WHERE id = 1').get() || {
-      id: 1,
+    db.prepare('SELECT * FROM settings WHERE userId = ?').get(userId) || {
+      userId,
       geminiApiKey: null,
       aiTopics: null,
       aiTone: null,
@@ -79,8 +164,8 @@ async function getSettings() {
   );
 }
 
-async function saveSettings(settings) {
-  const existing = await getSettings();
+async function saveSettings(userId, settings) {
+  const existing = await getSettings(userId);
   const merged = pick({ ...existing, ...settings }, [
     'geminiApiKey',
     'aiTopics',
@@ -90,27 +175,29 @@ async function saveSettings(settings) {
     'aiPreferredTimes',
     'aiExtraInstructions',
   ]);
+  merged.userId = userId;
   db.prepare(
-    `INSERT INTO settings (id, geminiApiKey, aiTopics, aiTone, aiAudience, aiPostsPerWeek, aiPreferredTimes, aiExtraInstructions)
-     VALUES (1, @geminiApiKey, @aiTopics, @aiTone, @aiAudience, @aiPostsPerWeek, @aiPreferredTimes, @aiExtraInstructions)
-     ON CONFLICT(id) DO UPDATE SET
+    `INSERT INTO settings (userId, geminiApiKey, aiTopics, aiTone, aiAudience, aiPostsPerWeek, aiPreferredTimes, aiExtraInstructions)
+     VALUES (@userId, @geminiApiKey, @aiTopics, @aiTone, @aiAudience, @aiPostsPerWeek, @aiPreferredTimes, @aiExtraInstructions)
+     ON CONFLICT(userId) DO UPDATE SET
        geminiApiKey=excluded.geminiApiKey, aiTopics=excluded.aiTopics, aiTone=excluded.aiTone,
        aiAudience=excluded.aiAudience, aiPostsPerWeek=excluded.aiPostsPerWeek,
        aiPreferredTimes=excluded.aiPreferredTimes, aiExtraInstructions=excluded.aiExtraInstructions`
   ).run(merged);
-  return getSettings();
+  return getSettings(userId);
 }
 
 // ---- posts ----
 
-async function createPost(post) {
+async function createPost(userId, post) {
   const ts = nowIso();
   const info = db
     .prepare(
-      `INSERT INTO posts (content, mediaPath, mediaType, visibility, scheduledFor, status, source, authorType, authorUrn, attempts, createdAt, updatedAt)
-       VALUES (@content, @mediaPath, @mediaType, @visibility, @scheduledFor, @status, @source, @authorType, @authorUrn, 0, @createdAt, @updatedAt)`
+      `INSERT INTO posts (userId, content, mediaPath, mediaType, visibility, scheduledFor, status, source, authorType, authorUrn, attempts, createdAt, updatedAt)
+       VALUES (@userId, @content, @mediaPath, @mediaType, @visibility, @scheduledFor, @status, @source, @authorType, @authorUrn, 0, @createdAt, @updatedAt)`
     )
     .run({
+      userId,
       content: post.content,
       mediaPath: post.mediaPath ?? null,
       mediaType: post.mediaType ?? 'none',
@@ -126,16 +213,19 @@ async function createPost(post) {
       createdAt: ts,
       updatedAt: ts,
     });
-  return getPost(info.lastInsertRowid);
+  return getPost(info.lastInsertRowid, userId);
 }
 
-async function getPost(id) {
-  return db.prepare('SELECT * FROM posts WHERE id = ?').get(id) || null;
+// Ownership-enforced at the SQL level: a post belonging to someone else simply isn't found,
+// rather than being fetched and then checked in JS (which is easy to forget to do in some
+// route later — see storage.service.js's file header).
+async function getPost(id, userId) {
+  return db.prepare('SELECT * FROM posts WHERE id = ? AND userId = ?').get(id, userId) || null;
 }
 
-async function listPosts({ status, source } = {}) {
-  let sql = 'SELECT * FROM posts WHERE 1=1';
-  const params = [];
+async function listPosts(userId, { status, source } = {}) {
+  let sql = 'SELECT * FROM posts WHERE userId = ?';
+  const params = [userId];
   if (status) {
     sql += ' AND status = ?';
     params.push(status);
@@ -148,8 +238,8 @@ async function listPosts({ status, source } = {}) {
   return db.prepare(sql).all(...params);
 }
 
-async function updatePost(id, fields) {
-  const existing = await getPost(id);
+async function updatePost(id, userId, fields) {
+  const existing = await getPost(id, userId);
   if (!existing) return null;
   const merged = pick({ ...existing, ...fields, updatedAt: nowIso() }, [
     'content',
@@ -170,6 +260,7 @@ async function updatePost(id, fields) {
     'postedAt',
   ]);
   merged.id = id;
+  merged.userId = userId;
   // Don't let a stale org URN survive a switch back to posting as yourself.
   if (merged.authorType === 'person') merged.authorUrn = null;
   db.prepare(
@@ -178,21 +269,22 @@ async function updatePost(id, fields) {
        attempts=@attempts, lastError=@lastError,
        lockedAt=@lockedAt, linkedinPostUrn=@linkedinPostUrn, linkedinPostUrl=@linkedinPostUrl,
        updatedAt=@updatedAt, postedAt=@postedAt
-     WHERE id=@id`
+     WHERE id=@id AND userId=@userId`
   ).run(merged);
-  return getPost(id);
+  return getPost(id, userId);
 }
 
-async function deletePost(id) {
-  db.prepare('DELETE FROM posts WHERE id = ?').run(id);
+async function deletePost(id, userId) {
+  db.prepare('DELETE FROM posts WHERE id = ? AND userId = ?').run(id, userId);
 }
 
 // Atomically claims up to `limit` due posts (status='pending' AND scheduledFor <= now),
 // flipping them to 'posting' with a lock timestamp so a cron overlap or a simultaneous
-// manual "Post Now" click can never process the same row twice. Wrapped in an explicit
-// BEGIN/COMMIT (node:sqlite has no `.transaction()` helper like better-sqlite3) — though
-// since this is a single Node process making only synchronous DB calls here, the loop
-// below is already atomic in practice; the transaction is defense in depth.
+// manual "Post Now" click can never process the same row twice. Deliberately NOT scoped to
+// a single user — this is the scheduler's cross-user work queue, global earliest-due-first
+// (per-user fairness is an explicitly out-of-scope future improvement). Each claimed row
+// already carries its own `userId` column (SELECT *), which the caller uses to resolve the
+// right owner's token before publishing — see postRunner.js.
 async function claimDuePosts(limit = 5) {
   const nowStr = nowIso();
   const claimed = [];
@@ -224,18 +316,23 @@ async function claimDuePosts(limit = 5) {
 }
 
 // Tries to claim one specific post (used by manual "Post Now") — fails silently (returns
-// null) if the scheduler already claimed it first, which is the whole point of the guard.
-async function claimSpecificPost(id) {
+// null) if it's not owned by this user, or the scheduler already claimed it first, which is
+// the whole point of the guard (also closes the "guess someone else's post id" hole).
+async function claimSpecificPost(id, userId) {
   const nowStr = nowIso();
   const result = db
-    .prepare(`UPDATE posts SET status='posting', lockedAt=?, attempts=attempts+1, updatedAt=? WHERE id=? AND status='pending'`)
-    .run(nowStr, nowStr, id);
+    .prepare(
+      `UPDATE posts SET status='posting', lockedAt=?, attempts=attempts+1, updatedAt=?
+       WHERE id=? AND userId=? AND status='pending'`
+    )
+    .run(nowStr, nowStr, id, userId);
   if (result.changes !== 1) return null;
-  return getPost(id);
+  return db.prepare('SELECT * FROM posts WHERE id = ?').get(id);
 }
 
 // Resets any post stuck in 'posting' for longer than `staleMinutes` (covers a process
-// crash mid-post) back to 'pending' so it gets picked up again.
+// crash mid-post) — global sweep, no user scoping needed (a crashed process could have been
+// mid-publish for any user's post).
 // Deliberately lands on 'failed', NOT back on 'pending'. A post stuck in 'posting' this
 // long means the process that claimed it died mid-request (e.g. a server restart) without
 // ever finding out whether LinkedIn actually received it — that's genuinely ambiguous, not
@@ -255,16 +352,25 @@ async function reapStaleLocks(staleMinutes = 5) {
   return result.changes;
 }
 
+// Cross-user by design, like claimDuePosts/reapStaleLocks above — used only by the
+// auto-update checker's "don't restart mid-publish" guard (autoUpdate.js), which cares
+// whether ANYONE's post is currently being published, not just one user's.
+async function anyPostsWithStatus(status) {
+  const row = db.prepare('SELECT COUNT(*) as c FROM posts WHERE status = ?').get(status);
+  return row.c > 0;
+}
+
 // ---- engagements ----
 
-async function createEngagement(engagement) {
+async function createEngagement(userId, engagement) {
   const ts = nowIso();
   const info = db
     .prepare(
-      `INSERT INTO engagements (sourceUrl, activityId, activityUrn, action, commentText, status, createdAt)
-       VALUES (@sourceUrl, @activityId, @activityUrn, @action, @commentText, @status, @createdAt)`
+      `INSERT INTO engagements (userId, sourceUrl, activityId, activityUrn, action, commentText, status, createdAt)
+       VALUES (@userId, @sourceUrl, @activityId, @activityUrn, @action, @commentText, @status, @createdAt)`
     )
     .run({
+      userId,
       sourceUrl: engagement.sourceUrl,
       activityId: engagement.activityId,
       activityUrn: engagement.activityUrn,
@@ -273,41 +379,44 @@ async function createEngagement(engagement) {
       status: engagement.status ?? 'pending',
       createdAt: ts,
     });
-  return getEngagement(info.lastInsertRowid);
+  return getEngagement(info.lastInsertRowid, userId);
 }
 
-async function getEngagement(id) {
-  return db.prepare('SELECT * FROM engagements WHERE id = ?').get(id) || null;
+async function getEngagement(id, userId) {
+  return db.prepare('SELECT * FROM engagements WHERE id = ? AND userId = ?').get(id, userId) || null;
 }
 
-async function updateEngagement(id, fields) {
-  const existing = await getEngagement(id);
+async function updateEngagement(id, userId, fields) {
+  const existing = await getEngagement(id, userId);
   if (!existing) return null;
   const merged = pick({ ...existing, ...fields }, ['status', 'error', 'completedAt']);
   merged.id = id;
+  merged.userId = userId;
   db.prepare(
-    `UPDATE engagements SET status=@status, error=@error, completedAt=@completedAt WHERE id=@id`
+    `UPDATE engagements SET status=@status, error=@error, completedAt=@completedAt WHERE id=@id AND userId=@userId`
   ).run(merged);
-  return getEngagement(id);
+  return getEngagement(id, userId);
 }
 
-async function listEngagements() {
-  return db.prepare('SELECT * FROM engagements ORDER BY createdAt DESC').all();
+async function listEngagements(userId) {
+  return db.prepare('SELECT * FROM engagements WHERE userId = ? ORDER BY createdAt DESC').all(userId);
 }
 
-// ---- organizations (Company Pages the connected member administers) ----
+// ---- organizations (Company Pages each user administers) ----
 
-// Wholesale replace rather than upsert-and-diff: the list only ever comes from a fresh
-// LinkedIn lookup (reconnect or manual refresh), so stale rows (pages you're no longer an
-// admin of) should disappear rather than linger.
-async function replaceOrganizations(orgs) {
+// Wholesale replace (scoped to this user only) rather than upsert-and-diff: the list only
+// ever comes from a fresh LinkedIn lookup for that user (reconnect or manual refresh), so
+// stale rows (pages they're no longer an admin of) should disappear rather than linger.
+async function replaceOrganizations(userId, orgs) {
   const ts = nowIso();
   db.exec('BEGIN IMMEDIATE');
   try {
-    db.exec('DELETE FROM organizations');
-    const insert = db.prepare('INSERT INTO organizations (urn, name, updatedAt) VALUES (@urn, @name, @updatedAt)');
+    db.prepare('DELETE FROM organizations WHERE userId = ?').run(userId);
+    const insert = db.prepare(
+      'INSERT INTO organizations (userId, urn, name, updatedAt) VALUES (@userId, @urn, @name, @updatedAt)'
+    );
     for (const org of orgs) {
-      insert.run({ urn: org.urn, name: org.name, updatedAt: ts });
+      insert.run({ userId, urn: org.urn, name: org.name, updatedAt: ts });
     }
     db.exec('COMMIT');
   } catch (err) {
@@ -316,11 +425,16 @@ async function replaceOrganizations(orgs) {
   }
 }
 
-async function listOrganizations() {
-  return db.prepare('SELECT * FROM organizations ORDER BY name ASC').all();
+async function listOrganizations(userId) {
+  return db.prepare('SELECT * FROM organizations WHERE userId = ? ORDER BY name ASC').all(userId);
 }
 
 module.exports = {
+  getUserById,
+  getUserByPersonUrn,
+  listAllUsers,
+  upsertUserFromProfile,
+  adoptOrphanedData,
   getToken,
   saveToken,
   clearToken,
@@ -335,6 +449,7 @@ module.exports = {
   claimDuePosts,
   claimSpecificPost,
   reapStaleLocks,
+  anyPostsWithStatus,
   createEngagement,
   getEngagement,
   updateEngagement,

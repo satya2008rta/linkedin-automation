@@ -42,8 +42,9 @@ document.addEventListener('submit', (e) => {
 });
 
 // "Browse..." buttons next to a mediaPath text input: <button data-browse-for="#someInput">.
-// Opens a native OS file picker server-side (see GET /posts/browse-file) and fills in the
-// real absolute path, then fires an 'input' event so any live preview picks up the change.
+// Opens the browser's native file picker, uploads the chosen image to the server (see
+// POST /posts/upload-media), and fills in the resulting server-side path — then fires an
+// 'input' event so any live preview picks up the change.
 document.addEventListener('click', (e) => {
   const button = e.target.closest('[data-browse-for]');
   if (!button) return;
@@ -72,44 +73,37 @@ document.addEventListener('click', (e) => {
     button.textContent = 'Processing image…';
 
     try {
-      if (file.path) {
-        input.value = file.path;
-        input.setAttribute('value', file.path);
+      const base64Data = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result.split(',')[1]);
+        reader.onerror = (err) => reject(err);
+        reader.readAsDataURL(file);
+      });
+
+      const res = await fetch('/posts/upload-media', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify({ filename: file.name, base64Data }),
+      });
+
+      const contentType = res.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        throw new Error(`Server returned status ${res.status}. Please restart your node server (npm run dev or node src/server.js) to load the new upload route.`);
+      }
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || `Upload failed with status ${res.status}`);
+      }
+
+      if (data.path) {
+        input.value = data.path;
+        input.setAttribute('value', data.path);
         input.dispatchEvent(new Event('input', { bubbles: true }));
         input.dispatchEvent(new Event('change', { bubbles: true }));
-      } else {
-        const base64Data = await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result.split(',')[1]);
-          reader.onerror = (err) => reject(err);
-          reader.readAsDataURL(file);
-        });
-
-        const res = await fetch('/posts/upload-media', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-          },
-          body: JSON.stringify({ filename: file.name, base64Data }),
-        });
-
-        const contentType = res.headers.get('content-type') || '';
-        if (!contentType.includes('application/json')) {
-          throw new Error(`Server returned status ${res.status}. Please restart your node server (npm run dev or node src/server.js) to load the new upload route.`);
-        }
-
-        const data = await res.json();
-        if (!res.ok) {
-          throw new Error(data.error || `Upload failed with status ${res.status}`);
-        }
-
-        if (data.path) {
-          input.value = data.path;
-          input.setAttribute('value', data.path);
-          input.dispatchEvent(new Event('input', { bubbles: true }));
-          input.dispatchEvent(new Event('change', { bubbles: true }));
-        }
       }
     } catch (err) {
       console.error('Failed to select file:', err);

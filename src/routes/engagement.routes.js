@@ -27,8 +27,9 @@ router.post('/', requireValidToken, async (req, res) => {
     throw err;
   }
 
+  const userId = req.activeUserId;
   const action = wantLike && wantComment ? 'like+comment' : wantLike ? 'like' : 'comment';
-  const engagement = await storage.createEngagement({
+  const engagement = await storage.createEngagement(userId, {
     sourceUrl,
     activityId: parsed.id,
     activityUrn: parsed.urn,
@@ -56,10 +57,10 @@ router.post('/', requireValidToken, async (req, res) => {
 
   if (errors.length) {
     logger.error('Engagement failed:', errors.join(' | '));
-    await storage.updateEngagement(engagement.id, { status: 'failed', error: errors.join(' | ') });
+    await storage.updateEngagement(engagement.id, userId, { status: 'failed', error: errors.join(' | ') });
     req.flash('error', errors.join(' '));
   } else {
-    await storage.updateEngagement(engagement.id, { status: 'done', completedAt: new Date().toISOString() });
+    await storage.updateEngagement(engagement.id, userId, { status: 'done', completedAt: new Date().toISOString() });
     req.flash('success', 'Done — check the post on LinkedIn.');
   }
   res.redirect('/engage');

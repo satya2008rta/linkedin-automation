@@ -15,9 +15,12 @@ const CLAIM_BATCH_SIZE = 5;
 // Shared by the cron loop and the manual "Post Now" route so the two paths behave
 // identically and can't drift apart.
 async function executeClaimedPost(post) {
-  const tokenState = await storage.tokenStatus();
+  // The claimed row (a plain SELECT * from storage.claimDuePosts/claimSpecificPost) already
+  // carries its owner's userId — publish under THAT user's token, never a global one, so two
+  // users each having a due post publish under their own identities.
+  const tokenState = await storage.tokenStatus(post.userId);
   if (!tokenState.connected || tokenState.expired) {
-    return storage.updatePost(post.id, {
+    return storage.updatePost(post.id, post.userId, {
       status: 'blocked_token_expired',
       lastError: 'LinkedIn token is missing or expired. Reconnect in Settings, then retry this post.',
     });
@@ -25,7 +28,7 @@ async function executeClaimedPost(post) {
 
   try {
     const result = await linkedinPost.publishPostRecord(post, tokenState.token);
-    return storage.updatePost(post.id, {
+    return storage.updatePost(post.id, post.userId, {
       status: 'posted',
       linkedinPostUrn: result.urn,
       linkedinPostUrl: result.url,
@@ -40,13 +43,13 @@ async function executeClaimedPost(post) {
       // Requeue with a short backoff so a transient LinkedIn/network error doesn't just
       // retry every cron tick and hammer the API.
       const nextTry = new Date(Date.now() + RETRY_BACKOFF_MINUTES * 60000).toISOString();
-      return storage.updatePost(post.id, {
+      return storage.updatePost(post.id, post.userId, {
         status: 'pending',
         scheduledFor: nextTry,
         lastError: message,
       });
     }
-    return storage.updatePost(post.id, { status: 'failed', lastError: message });
+    return storage.updatePost(post.id, post.userId, { status: 'failed', lastError: message });
   }
 }
 
@@ -62,9 +65,12 @@ async function runDueJobs() {
   return claimed.length;
 }
 
-// Called by the "Post Now" route for an on-demand, unscheduled publish.
-async function postNow(postId) {
-  const claimed = await storage.claimSpecificPost(postId);
+// Called by the "Post Now" route for an on-demand, unscheduled publish. userId scopes the
+// claim to the requesting user's own post — see storage.claimSpecificPost, which returns
+// null both when the post is mid-claim by the scheduler AND when it belongs to someone else,
+// so this error message covers both without leaking which case it was.
+async function postNow(postId, userId) {
+  const claimed = await storage.claimSpecificPost(postId, userId);
   if (!claimed) {
     throw new Error('This post is already being processed (likely by the scheduler) — refresh and check its status.');
   }

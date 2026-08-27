@@ -1,0 +1,38 @@
+<div class="card">
+  <h2>Share Connection Link with Client</h2>
+  <p class="hint" style="margin-bottom: 16px;">
+    Send this link to a client. When they click it and authorize LinkedIn, their profile and token will be saved to your dashboard. You will then be able to select them from the header dropdown and schedule posts on their behalf with no further authentication required.
+  </p>
+
+  <label for="inviteUrl">Shareable Invite Link (Expires <%= expiresAt %>)</label>
+  <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 12px;">
+    <input type="text" id="inviteUrl" value="<%= inviteUrl %>" readonly style="font-family: monospace; background: #f8f9fa;">
+    <button class="btn" type="button" onclick="copyInviteLink()">Copy Link</button>
+  </div>
+
+  <div id="copyNotice" class="flash success" style="display: none; margin-top: 12px;">
+    Link copied to clipboard! Share it with your client via WhatsApp, Email, or Slack.
+  </div>
+</div>
+
+<div class="card">
+  <h2>How it works for your client</h2>
+  <ol style="padding-left: 20px; font-size: 14px; line-height: 1.6; color: var(--text);">
+    <li>Client opens the link on any device (phone, tablet, computer).</li>
+    <li>They log in to LinkedIn and click "Allow" to grant posting permissions.</li>
+    <li>They see a confirmation screen ("You're connected — close this tab").</li>
+    <li>Their account instantly appears in your header drop-down menu!</li>
+  </ol>
+</div>
+
+<script>
+function copyInviteLink() {
+  const input = document.getElementById('inviteUrl');
+  input.select();
+  navigator.clipboard.writeText(input.value).then(() => {
+    const notice = document.getElementById('copyNotice');
+    notice.style.display = 'block';
+    setTimeout(() => { notice.style.display = 'none'; }, 4000);
+  });
+}
+</script>

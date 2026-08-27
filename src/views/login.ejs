@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sign in · LinkedIn Automation</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="login-body">
+  <div class="login-wrap">
+    <div class="login-card">
+      <div class="login-brand">
+        <span class="login-mark">in</span>
+        <span class="login-brand-name">LinkedIn Automation</span>
+      </div>
+
+      <h1 class="login-headline">Plan, draft, and schedule your LinkedIn posts</h1>
+      <p class="login-sub">Compose with AI assistance, queue posts for later, and track engagement — all from one place.</p>
+
+      <% if (messages.error && messages.error.length) { %>
+        <% messages.error.forEach(function(m) { %><div class="flash error"><%= m %></div><% }); %>
+      <% } %>
+      <% if (messages.success && messages.success.length) { %>
+        <% messages.success.forEach(function(m) { %><div class="flash success"><%= m %></div><% }); %>
+      <% } %>
+
+      <a class="login-cta" href="/auth/linkedin">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
+          <path d="M20.45 20.45h-3.55v-5.57c0-1.33-.02-3.03-1.85-3.03-1.85 0-2.14 1.44-2.14 2.94v5.66H9.36V9h3.41v1.56h.05c.47-.9 1.63-1.85 3.36-1.85 3.6 0 4.27 2.37 4.27 5.45v6.29zM5.34 7.43a2.06 2.06 0 1 1 0-4.12 2.06 2.06 0 0 1 0 4.12zM7.12 20.45H3.56V9h3.56v11.45z"/>
+        </svg>
+        Continue with LinkedIn
+      </a>
+
+      <p class="login-reassure">
+        You'll approve access on LinkedIn, then land right back here signed in. We only ever
+        post on your behalf when you tell us to.
+      </p>
+
+      <p class="login-footnote">Signing in with LinkedIn creates your account automatically — nothing else to set up.</p>
+    </div>
+  </div>
+</body>
+</html>

@@ -7,14 +7,16 @@ const API_BASE = 'https://api.linkedin.com/rest';
 const USERINFO_URL = 'https://api.linkedin.com/v2/userinfo';
 
 // Scopes granted by the "Sign In with LinkedIn using OpenID Connect" + "Share on LinkedIn"
-// products (both Default Tier, no partner approval needed), plus rw_organization_admin +
-// w_organization_social from the Community Management API product (requires the app to be
-// linked/verified against a LinkedIn Page you administer, and LinkedIn's approval) — these
-// two are what let the app discover which company pages you admin and post as one of them.
-// If Community Management API was never added to the app, LinkedIn will simply not grant
-// these two scopes on reconnect and org-related features degrade gracefully (see
-// linkedinOrg.service.js), rather than breaking personal posting.
-const SCOPES = ['openid', 'profile', 'email', 'w_member_social', 'rw_organization_admin', 'w_organization_social'];
+// products (both Default Tier, no partner approval needed) — this is all that's requested
+// for now. Company Page posting used to also request rw_organization_admin +
+// w_organization_social (from the Community Management API product, which needs LinkedIn's
+// manual approval per app), deliberately removed for the moment to keep the sign-in flow
+// simple and consistent while multi-user support is being rolled out. Org-related features
+// (linkedinOrg.service.js, the organizations table, "Post as a Page") already degrade
+// gracefully with just these scopes — they'll just always show "no company pages" rather
+// than erroring. Re-add 'rw_organization_admin', 'w_organization_social' here to bring
+// Company Page posting back.
+const SCOPES = ['openid', 'profile', 'email', 'w_member_social'];
 
 function restHeaders(accessToken, extra = {}) {
   return {

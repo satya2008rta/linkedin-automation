@@ -9,6 +9,14 @@ function required(name, fallback) {
 const env = {
   port: Number(required('PORT', 3000)),
   sessionSecret: required('SESSION_SECRET', 'dev-secret-change-me'),
+  adminEmail: required('ADMIN_EMAIL', 'satyasundar2008@gmail.com').toLowerCase(),
+  appBaseUrl: required('APP_BASE_URL', 'http://localhost:3000').replace(/\/+$/, ''),
+  // Off by default so local http://localhost keeps working (browsers silently drop
+  // "Secure" cookies over plain HTTP — flipping this on prematurely would break sign-in
+  // for anyone not behind HTTPS). Set COOKIE_SECURE=true once this runs behind real HTTPS
+  // (e.g. hosted online later) — this one flag is the only session-cookie change needed
+  // for that move, no code changes required.
+  cookieSecure: required('COOKIE_SECURE', 'false') === 'true',
 
   linkedin: {
     clientId: required('LINKEDIN_CLIENT_ID', ''),

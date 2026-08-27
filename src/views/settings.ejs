@@ -3,7 +3,7 @@
   <% if (tokenStatus.connected && !tokenStatus.expired) { %>
     <p>Connected as <strong><%= token.displayName %></strong> (<%= token.email %>).</p>
     <p class="hint">Token expires <%= friendlyDate(token.expiresAt) %>. LinkedIn's Default Tier doesn't issue refresh tokens, so you'll need to reconnect when it gets close.</p>
-    <form method="POST" action="/auth/logout" style="display:inline;"><button class="btn secondary" type="submit">Disconnect</button></form>
+    <form method="POST" action="/auth/disconnect-linkedin" style="display:inline;"><button class="btn secondary" type="submit">Disconnect</button></form>
     <a class="btn secondary" href="/auth/linkedin">Reconnect / refresh</a>
   <% } else { %>
     <% if (tokenStatus.connected && tokenStatus.expired) { %>

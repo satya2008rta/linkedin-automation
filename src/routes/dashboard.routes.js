@@ -5,12 +5,13 @@ const { env } = require('../config/env');
 
 router.get('/', async (req, res, next) => {
   try {
+    const userId = req.activeUserId;
     const [pending, posted, failed, drafts, engagements] = await Promise.all([
-      storage.listPosts({ status: 'pending' }),
-      storage.listPosts({ status: 'posted' }),
-      storage.listPosts({ status: 'failed' }),
-      storage.listPosts({ status: 'draft' }),
-      storage.listEngagements(),
+      storage.listPosts(userId, { status: 'pending' }),
+      storage.listPosts(userId, { status: 'posted' }),
+      storage.listPosts(userId, { status: 'failed' }),
+      storage.listPosts(userId, { status: 'draft' }),
+      storage.listEngagements(userId),
     ]);
     res.render('dashboard', {
       title: 'Dashboard',
@@ -28,9 +29,10 @@ router.get('/', async (req, res, next) => {
 
 router.get('/compose', async (req, res, next) => {
   try {
-    const token = await storage.getToken();
-    const organizations = await storage.listOrganizations();
-    const settings = await storage.getSettings();
+    const userId = req.activeUserId;
+    const token = await storage.getToken(userId);
+    const organizations = await storage.listOrganizations(userId);
+    const settings = await storage.getSettings(userId);
     res.render('compose', { title: 'Compose', active: 'compose', token, post: null, organizations, settings });
   } catch (err) {
     next(err);
@@ -39,11 +41,12 @@ router.get('/compose', async (req, res, next) => {
 
 router.get('/queue', async (req, res, next) => {
   try {
-    const posts = await storage.listPosts({});
+    const userId = req.activeUserId;
+    const posts = await storage.listPosts(userId, {});
     const queued = posts.filter((p) => p.status !== 'draft' && p.status !== 'posted');
-    const token = await storage.getToken();
-    const organizations = await storage.listOrganizations();
-    const settings = await storage.getSettings();
+    const token = await storage.getToken(userId);
+    const organizations = await storage.listOrganizations(userId);
+    const settings = await storage.getSettings(userId);
     res.render('queue', { title: 'Queue', active: 'queue', posts: queued, token, organizations, settings });
   } catch (err) {
     next(err);
@@ -52,9 +55,10 @@ router.get('/queue', async (req, res, next) => {
 
 router.get('/posted', async (req, res, next) => {
   try {
-    const posts = await storage.listPosts({ status: 'posted' });
+    const userId = req.activeUserId;
+    const posts = await storage.listPosts(userId, { status: 'posted' });
     posts.sort((a, b) => new Date(b.postedAt || b.createdAt) - new Date(a.postedAt || a.createdAt));
-    const token = await storage.getToken();
+    const token = await storage.getToken(userId);
     res.render('posted', { title: 'Posted', active: 'posted', posts, token });
   } catch (err) {
     next(err);
@@ -63,7 +67,7 @@ router.get('/posted', async (req, res, next) => {
 
 router.get('/engage', async (req, res, next) => {
   try {
-    const engagements = await storage.listEngagements();
+    const engagements = await storage.listEngagements(req.activeUserId);
     res.render('engage', { title: 'Engage', active: 'engage', engagements });
   } catch (err) {
     next(err);
@@ -72,10 +76,11 @@ router.get('/engage', async (req, res, next) => {
 
 router.get('/calendar', async (req, res, next) => {
   try {
-    const allPosts = await storage.listPosts({});
-    const settings = await storage.getSettings();
-    const token = await storage.getToken();
-    const organizations = await storage.listOrganizations();
+    const userId = req.activeUserId;
+    const allPosts = await storage.listPosts(userId, {});
+    const settings = await storage.getSettings(userId);
+    const token = await storage.getToken(userId);
+    const organizations = await storage.listOrganizations(userId);
 
     const now = new Date();
     const reqYear = parseInt(req.query.year, 10) || now.getFullYear();
@@ -108,9 +113,10 @@ router.get('/calendar', async (req, res, next) => {
 
 router.get('/settings', async (req, res, next) => {
   try {
-    const token = await storage.getToken();
-    const settings = await storage.getSettings();
-    const organizations = await storage.listOrganizations();
+    const userId = req.activeUserId;
+    const token = await storage.getToken(userId);
+    const settings = await storage.getSettings(userId);
+    const organizations = await storage.listOrganizations(userId);
     res.render('settings', {
       title: 'Settings',
       active: 'settings',

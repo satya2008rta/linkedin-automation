@@ -54,6 +54,9 @@ if not exist "node_modules" (
     pause
     exit /b 1
   )
+) else (
+  echo Checking and updating dependencies if needed...
+  call npm install --prefer-offline --no-audit --no-fund
 )
 
 echo Starting the dashboard at http://localhost:%APP_PORT% ...
