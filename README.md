@@ -30,7 +30,7 @@ This matters before you set anything up, because it shapes what's actually possi
 
 | Requirement | Notes |
 |---|---|
-| **Windows** | The launcher script, the native browse dialog fallback, and the setup instructions below are Windows-specific. The core Node/Express app itself is cross-platform, but you'd need to adapt the `.bat` launcher and a couple of PowerShell-shelled routes to run this on Mac/Linux. |
+| **Windows or macOS** | The `Start LinkedIn Automation.bat` launcher and the auto-update restart are Windows-only. The core Node/Express app is cross-platform: on macOS/Linux run it with `npm start` (see "Running on macOS" in §7). |
 | **Node.js ≥ 22.5** | Required specifically for the built-in `node:sqlite` module this app uses as its database (see §11) — no separate database server to install, and deliberately no native npm module requiring a C++ build toolchain. |
 | **Git** | To clone the repo and (optionally) push/pull updates. |
 | **A LinkedIn account** | With a Developer account at https://www.linkedin.com/developers — free, no approval needed to get started. |
@@ -57,13 +57,46 @@ npm --version
 
 If `winget` installs a Node version older than 22.5, install the current release instead: `winget install --id OpenJS.NodeJS --version 22` or download it from https://nodejs.org.
 
-### 4b. Clone the repo and install the app's dependencies
+### 4a-mac. Install the prerequisites (macOS, one time)
+
+Using [Homebrew](https://brew.sh) (install it first if `brew --version` fails):
 
 ```
+brew install git node
+```
+
+Then confirm `node --version` shows v22.5.0 or newer (if not, `brew upgrade node`).
+
+### 4b. Create a folder, clone the repo into it, and install the dependencies
+
+Create the parent folder first, then clone. Cloning into a folder that doesn't exist yet, or running `cd` before the clone has finished, gives a "path not found" error. Use any location you like; the examples use a `Projects` folder.
+
+**Windows (PowerShell):**
+
+Do **not** run these from `C:\WINDOWS\system32`. An "Administrator" PowerShell window (and the one that appears after a `winget` install prompts for admin) starts there, and it is a protected folder, so you get `Permission denied`, then `Cannot find path`, then `EPERM` on `npm install`. Open a normal (non-admin) PowerShell, or just change into your user folder first:
+
+```
+cd $HOME
+mkdir Projects
+cd Projects
 git clone https://github.com/satya2008rta/linkedin-automation.git
 cd linkedin-automation
 npm install
 ```
+
+**macOS / Linux (Terminal):**
+
+```
+mkdir -p ~/Projects
+cd ~/Projects
+git clone https://github.com/satya2008rta/linkedin-automation.git
+cd linkedin-automation
+npm install
+```
+
+If the folder already exists (`mkdir` reports "already exists"), that's fine; carry on with `cd`.
+
+If you already hit the error above, `cd $HOME` and run the block again. A leftover, empty `C:\Windows\System32\linkedin-automation` folder may exist from the failed attempt; it is harmless, and you can delete it from an Administrator PowerShell with `Remove-Item C:\Windows\System32\linkedin-automation -Recurse -Force`.
 
 `npm install` reads `package.json` / `package-lock.json` and installs everything into `node_modules/`:
 
@@ -84,8 +117,18 @@ For a clean, reproducible install that exactly matches the lockfile (e.g. on a s
 
 ### 4c. Quick start (everything in one go)
 
+Run from inside the `linkedin-automation` folder.
+
+Windows:
 ```
 copy .env.example .env
+npm install
+npm start
+```
+
+macOS / Linux:
+```
+cp .env.example .env
 npm install
 npm start
 ```
@@ -138,6 +181,26 @@ npm run initdb      # optional — creates data/app.db up front; happens automat
 ```
 
 Either way, confirm it's actually up: `http://localhost:3000/health` should return `{"ok":true}`.
+
+### Running on macOS
+
+The app itself (Node, Express, SQLite) is cross-platform, so on a Mac you skip the `.bat` launcher and run it from Terminal, from inside the project folder:
+
+```
+cp .env.example .env     # first time only, then edit .env with your LinkedIn credentials
+npm install              # first time, and after pulling updates
+npm start                # then open http://localhost:3000
+```
+
+- Edit `.env` with any editor, e.g. `open -e .env` (TextEdit) or `nano .env`.
+- Stop the server with `Ctrl+C`. Scheduled posts only publish while it is running, so keep the Terminal window open (or see §12 for PM2).
+- If you get "address already in use", something still holds the port. Find and stop it with:
+  ```
+  lsof -ti :3000 | xargs kill
+  ```
+- Optional auto-restart on file changes: `npm run dev`.
+- To keep it running in the background across Terminal closures, use PM2: `npm install -g pm2`, then `pm2 start src/server.js --name linkedin-automation`, `pm2 save`.
+- The auto-update feature (§10) restarts the app through the Windows launcher, so leave `AUTO_UPDATE_ENABLED=false` on a Mac. Update manually with `git pull && npm install`, then restart.
 
 ## 8. Connect your LinkedIn account
 
