@@ -4,7 +4,7 @@
   <% if (!settings.geminiApiKey) { %>
     <p class="hint" style="color:#b31b1b;">No Gemini API key saved yet — add one in <a href="/settings">Settings</a> first.</p>
   <% } %>
-  <form method="POST" action="/ai/generate-plan" style="display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end; margin-top:12px;">
+  <form method="POST" action="/ai/generate-plan" id="generate-plan-form" style="display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end; margin-top:12px;">
     <div>
       <label style="display:block; font-size:12px; font-weight:600; margin-bottom:4px;">From Date</label>
       <input type="date" name="fromDate" id="gen-from-date" class="form-control" style="padding:6px 10px; font-size:13px;">
@@ -14,9 +14,36 @@
       <input type="date" name="toDate" id="gen-to-date" class="form-control" style="padding:6px 10px; font-size:13px;">
     </div>
     <div>
-      <button type="submit" class="btn" <%= settings.geminiApiKey ? '' : 'disabled' %>>Generate plan for date range</button>
+      <button type="submit" class="btn" id="generate-plan-btn" <%= settings.geminiApiKey ? '' : 'disabled' %>>Generate plan for date range</button>
     </div>
   </form>
+  <p class="hint" id="generate-plan-status" role="status" aria-live="polite" style="display:none; margin-top:10px;">Generating your content plan with AI. This can take a minute, please keep this page open.</p>
+  <script>
+    (function () {
+      var form = document.getElementById('generate-plan-form');
+      var btn = document.getElementById('generate-plan-btn');
+      var status = document.getElementById('generate-plan-status');
+      var label = btn.textContent;
+      function reset() {
+        btn.disabled = <%= settings.geminiApiKey ? 'false' : 'true' %>;
+        btn.classList.remove('is-loading');
+        btn.textContent = label;
+        status.style.display = 'none';
+      }
+      form.addEventListener('submit', function (e) {
+        if (e.defaultPrevented || btn.disabled) return;
+        // Disable on the next tick so the browser still submits the form normally.
+        setTimeout(function () {
+          btn.disabled = true;
+          btn.classList.add('is-loading');
+          btn.textContent = 'Generating…';
+          status.style.display = 'block';
+        }, 0);
+      });
+      // Coming back via the Back button restores the page from cache mid-spinner.
+      window.addEventListener('pageshow', function (e) { if (e.persisted) reset(); });
+    })();
+  </script>
 </div>
 
 <!-- Outlook Style Interactive Monthly Calendar -->
