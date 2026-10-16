@@ -38,13 +38,59 @@ This matters before you set anything up, because it shapes what's actually possi
 
 ## 4. Getting the code
 
+### 4a. Install the prerequisites (Windows, one time)
+
+Run these in PowerShell or Command Prompt. Skip any tool you already have (check with `git --version` and `node --version`).
+
+```
+winget install --id Git.Git -e
+winget install --id OpenJS.NodeJS -e
+```
+
+Close and reopen your terminal afterwards so `git`, `node` and `npm` are picked up on `PATH`, then confirm:
+
+```
+git --version
+node --version     # must be v22.5.0 or newer
+npm --version
+```
+
+If `winget` installs a Node version older than 22.5, install the current release instead: `winget install --id OpenJS.NodeJS --version 22` or download it from https://nodejs.org.
+
+### 4b. Clone the repo and install the app's dependencies
+
 ```
 git clone https://github.com/satya2008rta/linkedin-automation.git
 cd linkedin-automation
 npm install
 ```
 
-`npm install` pulls plain-JS dependencies only — no native compilation step, so this should complete cleanly even on a machine with no build tools installed.
+`npm install` reads `package.json` / `package-lock.json` and installs everything into `node_modules/`:
+
+| Package | Purpose |
+|---|---|
+| `express`, `express-session`, `express-ejs-layouts`, `ejs`, `connect-flash` | Web server, sessions, page templates, flash messages |
+| `axios` | LinkedIn API calls |
+| `@google/generative-ai` | Gemini AI features |
+| `node-cron` | Post scheduler |
+| `date-fns` | Date handling |
+| `dotenv` | Loads `.env` |
+| `mime-types` | Image type validation |
+| `nodemon` (dev) | Auto-restart for `npm run dev` |
+
+These are plain-JS dependencies only — no native compilation step, so this should complete cleanly even on a machine with no build tools installed. There is no database server to install either; the app uses Node's built-in `node:sqlite`.
+
+For a clean, reproducible install that exactly matches the lockfile (e.g. on a server), use `npm ci` instead of `npm install`. To skip dev tools, add `--omit=dev`.
+
+### 4c. Quick start (everything in one go)
+
+```
+copy .env.example .env
+npm install
+npm start
+```
+
+Then edit `.env` with your LinkedIn credentials (§5–§6) and open http://localhost:3000.
 
 ## 5. Set up your LinkedIn Developer app
 
